@@ -94,7 +94,7 @@ router.post('/', async (req, res) => {
     // Проверяем, есть ли токен авторизации
     const authHeader = req.headers.authorization;
     const isAuthenticated = authHeader && authHeader.startsWith('Bearer ');
-    let userId = null;
+    let userId: number;
     let isAdmin = false;
 
     // Если токен есть, пытаемся получить инфо о пользователе
@@ -108,9 +108,13 @@ router.post('/', async (req, res) => {
         userId = decoded.userId;
         isAdmin = decoded.role === 'admin';
       } catch (error) {
-        // Если токен недействителен, просто не устанавливаем userId и isAdmin
+        // Если токен недействителен, возвращаем ошибку авторизации
         console.warn('Недействительный токен авторизации');
+        return res.status(401).json({ error: 'Требуется авторизация' });
       }
+    } else {
+      // Требуем авторизацию для создания отчета
+      return res.status(401).json({ error: 'Требуется авторизация для создания отчета' });
     }
 
     // Автоматически одобряем отчеты о симптомах или если пользователь - админ
