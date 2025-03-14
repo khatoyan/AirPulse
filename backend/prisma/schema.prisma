@@ -1,0 +1,78 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  latitude    Float
+  longitude   Float
+  severity    Int
+  type        String   @default("symptom") // "symptom" или "plant"
+  symptom     String?  // Обязательно для типа "symptom"
+  plantType   String?  // Обязательно для типа "plant"
+  plantId     Int?     // Ссылка на растение, если тип "plant"
+  plant       Plant?   @relation(fields: [plantId], references: [id])
+  description String?
+  isCalculated Boolean @default(false) // Флаг для вычисляемых точек
+  userId      Int?     // Пользователь, создавший отчет
+  user        User?    @relation(fields: [userId], references: [id])
+  approved    Boolean  @default(false) // Флаг модерации
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Zone {
+  id        Int      @id @default(autoincrement())
+  name      String
+  polygon   Json     // GeoJSON полигон
+  index     Float    // Индекс опасности
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WeatherData {
+  id          Int      @id @default(autoincrement())
+  temperature Float
+  humidity    Float
+  windSpeed   Float
+  windDeg     Float
+  createdAt   DateTime @default(now())
+}
+
+model Plant {
+  id          Int      @id @default(autoincrement())
+  name        String
+  species     String
+  description String?
+  bloomStart  String?  // Месяц начала цветения
+  bloomEnd    String?  // Месяц конца цветения
+  allergenicity Int     // Уровень аллергенности от 1 до 5
+  reports     Report[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  email       String   @unique
+  password    String
+  name        String?
+  role        String   @default("user") // "user" или "admin"
+  reports     Report[]
+  hasAllergy  Boolean  @default(false)
+  allergyTypes String[] // Типы аллергенов: "пыльца деревьев", "пыльца трав", "пыльца сорняков" и т.д.
+  allergyLevel Int?    // Уровень аллергии от 1 до 5, если есть
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

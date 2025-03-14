@@ -1,0 +1,84 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  background-color: #1a1a1a;
+  color: white;
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.weather-info {
+  display: flex;
+  gap: 2rem;
+  font-size: 0.9rem;
+}
+
+.app-main {
+  flex: 1;
+  position: relative;
+}
+
+.app-footer {
+  background-color: #1a1a1a;
+  color: white;
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.8rem;
+}
+
+/* Стили для зональной статистики */
+.zone-statistics {
+  padding: 1rem;
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.zone-statistics h3 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+}
+
+.zone-statistics p {
+  margin: 0.25rem 0;
+  color: #666;
+}
+
+.zone-statistics ul {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.zone-statistics li {
+  color: #666;
+  margin: 0.25rem 0;
+}
+
+/* Добавляем стили для Leaflet */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Сброс стилей для всего приложения */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
