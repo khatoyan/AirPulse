@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import App from './App';
-import './index.css';
 // Импортируем шрифт Inter для нашей новой темы
 import '@fontsource/inter/300.css';
 import '@fontsource/inter/400.css';

@@ -25,8 +25,8 @@ model Report {
   plant       Plant?   @relation(fields: [plantId], references: [id])
   description String?
   isCalculated Boolean @default(false) // Флаг для вычисляемых точек
-  userId      Int?     // Пользователь, создавший отчет
-  user        User?    @relation(fields: [userId], references: [id])
+  userId      Int      // Пользователь, создавший отчет (обязательное поле)
+  user        User     @relation(fields: [userId], references: [id])
   approved    Boolean  @default(false) // Флаг модерации
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

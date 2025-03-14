@@ -1,12 +1,54 @@
-# React + Vite
+# AirPulse Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Интерфейс приложения для мониторинга качества воздуха и аллергических рисков.
 
-Currently, two official plugins are available:
+## Технологии
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- React 18
+- Vite
+- Material UI 5
+- Leaflet для карт
+- Zustand для управления состоянием
+- Axios для API запросов
 
-## Expanding the ESLint configuration
+## Установка и запуск
 
-If you are developing a production application, we recommend using TypeScript and enable type-aware lint rules. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+1. Установите зависимости:
+   ```bash
+   npm install
+   ```
+
+2. Настройте переменные окружения:
+   - Создайте файл `.env` и добавьте необходимые переменные:
+     ```
+     VITE_API_URL=http://localhost:3001/api
+     VITE_OPENWEATHER_API_KEY=your_api_key
+     ```
+
+3. Запустите приложение в режиме разработки:
+   ```bash
+   npm run dev
+   ```
+
+4. Для сборки продакшн-версии:
+   ```bash
+   npm run build
+   ```
+
+## Основные возможности
+
+- Интерактивная карта с отчетами о симптомах и растениях-аллергенах
+- Тепловая карта распространения аллергенов на основе гауссовского распределения
+- Создание и просмотр отчетов о симптомах
+- Просмотр информации о растениях-аллергенах
+- Просмотр текущих погодных условий
+- Панель администратора для модерации контента
+
+## Структура проекта
+
+- `/src/components` - React компоненты
+- `/src/services` - Сервисы для работы с API
+- `/src/stores` - Хранилища состояния Zustand
+- `/src/utils` - Вспомогательные функции
+- `/src/hooks` - Пользовательские React хуки
+- `/src/assets` - Статические ресурсы

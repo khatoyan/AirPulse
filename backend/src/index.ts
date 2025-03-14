@@ -27,11 +27,35 @@ app.get('/api', (req, res) => {
   res.json({ message: 'AirPulse API работает!' });
 });
 
-// Error handling
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+// Кастомный интерфейс для ошибок с кодом статуса
+interface CustomError extends Error {
+  status?: number;
+  code?: string;
+}
+
+// Расширенная обработка ошибок
+app.use((err: CustomError, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Глобальная ошибка:', err);
   console.error(err.stack);
-  res.status(500).json({ error: 'Что-то пошло не так!', message: err.message });
+  
+  // Определение статуса ошибки (по умолчанию 500)
+  const statusCode = err.status || 500;
+  
+  // Формирование ответа
+  const errorResponse: Record<string, any> = {
+    error: true,
+    message: err.message || 'Что-то пошло не так!',
+    code: err.code || 'INTERNAL_SERVER_ERROR',
+    path: req.path,
+    timestamp: new Date().toISOString()
+  };
+  
+  // В режиме разработки добавляем стек ошибки
+  if (process.env.NODE_ENV !== 'production') {
+    errorResponse['stack'] = err.stack;
+  }
+  
+  res.status(statusCode).json(errorResponse);
 });
 
 app.listen(config.port, () => {
