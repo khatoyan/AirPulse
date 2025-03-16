@@ -78,4 +78,64 @@
 /* Стили для маркеров симптомов */
 .symptom-marker-icon {
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3));
+}
+
+/* Стили для индикатора загрузки на карте */
+.map-loading-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 20px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.weather-loading-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 8px;
+  border-radius: 50%;
+  z-index: 999;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.report-popup {
+  font-family: 'Roboto', 'Arial', sans-serif;
+  padding: 5px;
+}
+
+.report-popup h3 {
+  margin: 0 0 10px 0;
+  color: #2196f3;
+  font-size: 16px;
+}
+
+.report-popup p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+/* Переопределение стилей для маркеров Leaflet, чтобы убрать дефолтные иконки */
+.leaflet-marker-icon.leaflet-zoom-animated.leaflet-interactive {
+  background-image: none !important;
+  background: transparent !important;
+}
+
+/* Убедимся, что дефолтные иконки не будут показываться на фоне */
+.leaflet-marker-icon:before {
+  content: none !important;
+}
+
+/* Убедимся, что тень маркера также не отображается */
+.leaflet-marker-shadow {
+  display: none !important;
 } 

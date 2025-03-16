@@ -27,14 +27,21 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
     const token = authHeader.split(' ')[1];
 
     // Проверяем токен
-    const decoded = jwt.verify(token, config.jwtSecret) as {
-      userId: number;
-      email: string;
-      role: string;
-    };
+    const decoded = jwt.verify(token, config.jwtSecret) as any;
 
-    // Добавляем информацию о пользователе в запрос
-    req.user = decoded;
+    // Поддерживаем как старый формат с userId, так и новый с id
+    const userId = decoded.id || decoded.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Некорректный формат токена' });
+    }
+
+    // Добавляем информацию о пользователе в запрос с поддержкой старого формата
+    req.user = {
+      userId,
+      email: decoded.email,
+      role: decoded.role
+    };
+    
     next();
   } catch (error) {
     console.error('Ошибка аутентификации:', error);

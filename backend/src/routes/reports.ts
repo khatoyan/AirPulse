@@ -101,11 +101,9 @@ router.post('/', async (req, res) => {
     if (isAuthenticated) {
       try {
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, config.jwtSecret) as { 
-          userId: number; 
-          role: string;
-        };
-        userId = decoded.userId;
+        const decoded = jwt.verify(token, config.jwtSecret) as any;
+        // Проверяем, используем ли новый формат (id) или старый (userId)
+        userId = decoded.id || decoded.userId;
         isAdmin = decoded.role === 'admin';
       } catch (error) {
         // Если токен недействителен, возвращаем ошибку авторизации
@@ -115,6 +113,15 @@ router.post('/', async (req, res) => {
     } else {
       // Требуем авторизацию для создания отчета
       return res.status(401).json({ error: 'Требуется авторизация для создания отчета' });
+    }
+
+    // Проверяем обязательные поля в зависимости от типа отчета
+    if (type === 'symptom' && !symptom) {
+      return res.status(400).json({ error: 'Для отчета о симптоме требуется указать симптом' });
+    }
+    
+    if (type === 'plant' && !plantId) {
+      return res.status(400).json({ error: 'Для отчета о растении требуется указать ID растения' });
     }
 
     // Автоматически одобряем отчеты о симптомах или если пользователь - админ
@@ -128,7 +135,7 @@ router.post('/', async (req, res) => {
         type,
         symptom,
         plantType,
-        plantId,
+        plantId: plantId ? Number(plantId) : null,
         description,
         userId,
         approved,
@@ -138,7 +145,11 @@ router.post('/', async (req, res) => {
     res.status(201).json(report);
   } catch (error) {
     console.error('Ошибка при создании отчета:', error);
-    res.status(500).json({ error: 'Ошибка при создании отчета' });
+    res.status(500).json({ 
+      error: 'Ошибка при создании отчета', 
+      message: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      stack: process.env.NODE_ENV === 'production' ? undefined : error instanceof Error ? error.stack : undefined
+    });
   }
 });
 

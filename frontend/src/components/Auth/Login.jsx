@@ -9,12 +9,44 @@ function Login() {
     password: ''
   });
   
+  const [errors, setErrors] = useState({
+    email: '',
+    password: ''
+  });
+  
   const { login, error, isLoading, clearError } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   
   // Получаем URL для перенаправления после входа
   const from = location.state?.from?.pathname || '/';
+  
+  // Валидация формы
+  const validateForm = () => {
+    let isValid = true;
+    const newErrors = {
+      email: '',
+      password: ''
+    };
+    
+    // Проверка email
+    if (!credentials.email) {
+      newErrors.email = 'Email обязателен';
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(credentials.email)) {
+      newErrors.email = 'Введите корректный email';
+      isValid = false;
+    }
+    
+    // Проверка пароля
+    if (!credentials.password) {
+      newErrors.password = 'Пароль обязателен';
+      isValid = false;
+    }
+    
+    setErrors(newErrors);
+    return isValid;
+  };
   
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -23,12 +55,23 @@ function Login() {
       [name]: value
     }));
     
-    // Очищаем ошибку при изменении полей
+    // Очищаем ошибку поля при вводе
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+    
+    // Очищаем ошибку API при изменении полей
     if (error) clearError();
   };
   
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Проверяем форму перед отправкой
+    if (!validateForm()) return;
     
     const success = await login(credentials);
     
@@ -74,6 +117,8 @@ function Login() {
             autoFocus
             value={credentials.email}
             onChange={handleChange}
+            error={!!errors.email}
+            helperText={errors.email}
           />
           <TextField
             margin="normal"
@@ -86,6 +131,8 @@ function Login() {
             autoComplete="current-password"
             value={credentials.password}
             onChange={handleChange}
+            error={!!errors.password}
+            helperText={errors.password}
           />
           <Button
             type="submit"

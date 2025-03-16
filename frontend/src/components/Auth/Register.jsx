@@ -76,15 +76,27 @@ const Register = () => {
   };
 
   const handleAllergyTypeToggle = (type) => {
-    const updatedTypes = formData.allergyTypes.includes(type)
-      ? formData.allergyTypes.filter(t => t !== type)
-      : [...formData.allergyTypes, type];
-    
-    setFormData({ ...formData, allergyTypes: updatedTypes });
+    setFormData(prevData => {
+      const types = [...prevData.allergyTypes];
+      const index = types.indexOf(type);
+      
+      if (index === -1) {
+        types.push(type);
+      } else {
+        types.splice(index, 1);
+      }
+      
+      // Очищаем ошибку, если есть выбранные типы
+      if (types.length > 0 && errors.allergyTypes) {
+        setErrors(prev => ({ ...prev, allergyTypes: '' }));
+      }
+      
+      return { ...prevData, allergyTypes: types };
+    });
   };
 
   const handleAllergyLevelChange = (e, newValue) => {
-    setFormData({ ...formData, allergyLevel: newValue });
+    setFormData(prev => ({ ...prev, allergyLevel: newValue }));
   };
 
   const togglePasswordVisibility = () => {
@@ -109,14 +121,25 @@ const Register = () => {
       newErrors.password = 'Пароль обязателен';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Пароль должен содержать минимум 6 символов';
+    } else if (!/[A-Z]/.test(formData.password)) {
+      newErrors.password = 'Пароль должен содержать хотя бы одну заглавную букву';
+    } else if (!/[0-9]/.test(formData.password)) {
+      newErrors.password = 'Пароль должен содержать хотя бы одну цифру';
     }
     
-    if (formData.password !== formData.confirmPassword) {
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Подтвердите пароль';
+    } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Пароли не совпадают';
     }
     
     if (!formData.name) {
       newErrors.name = 'Имя обязательно';
+    }
+    
+    // Если пользователь указал, что у него есть аллергия, проверяем, выбраны ли типы
+    if (formData.hasAllergy && formData.allergyTypes.length === 0) {
+      newErrors.allergyTypes = 'Выберите хотя бы один тип аллергии';
     }
     
     setErrors(newErrors);
@@ -127,6 +150,7 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Проверяем форму перед отправкой
     if (!validateForm()) {
       return;
     }
@@ -135,73 +159,47 @@ const Register = () => {
     
     try {
       // Подготавливаем данные для отправки
-      const registrationData = {
+      const userData = {
         email: formData.email,
         password: formData.password,
         name: formData.name,
-        hasAllergy: formData.hasAllergy,
-        allergyTypes: formData.hasAllergy ? formData.allergyTypes : [],
-        allergyLevel: formData.hasAllergy ? formData.allergyLevel : null
+        hasAllergy: formData.hasAllergy
       };
       
-      // Отправляем запрос на регистрацию
-      const response = await authService.register(registrationData);
-      
-      // Логируем ответ для отладки
-      console.log('Ответ от сервера при регистрации:', response);
-
-      // Проверяем структуру ответа
-      if (!response || !response.token) {
-        throw new Error('Некорректный ответ от сервера после регистрации: нет токена');
+      // Если у пользователя есть аллергия, добавляем соответствующие поля
+      if (formData.hasAllergy) {
+        userData.allergyTypes = formData.allergyTypes;
+        userData.allergyLevel = formData.allergyLevel;
       }
-
-      // Обновляем состояние аутентификации
-      console.log('Ответ от сервера при регистрации:', {
-        token: typeof response.token === 'string' 
-          ? `${response.token.substring(0, 20)}...` 
-          : JSON.stringify(response.token),
-        user: response.user
-      });
-
-      // Инициируем вход - исправляем здесь, передаем учетные данные
-      await login({
-        email: formData.email,
-        password: formData.password
-      });
       
+      // Отправляем запрос на регистрацию
+      const response = await authService.register(userData);
+      
+      // Показываем уведомление об успешной регистрации
       setNotification({
         open: true,
-        message: 'Регистрация успешна! Перенаправляем вас...',
+        message: 'Регистрация успешна! Выполняется вход...',
         severity: 'success'
       });
       
-      // Перенаправляем на главную страницу после короткой задержки
-      setTimeout(() => {
+      // Автоматически выполняем вход с зарегистрированными учетными данными
+      setTimeout(async () => {
+        await login({
+          email: formData.email,
+          password: formData.password
+        });
+        
+        // Перенаправляем на главную страницу
         navigate('/');
       }, 1500);
       
     } catch (error) {
       console.error('Ошибка при регистрации:', error);
       
-      // Получаем более подробную информацию об ошибке
-      let errorMessage = 'Произошла ошибка при регистрации';
-      
-      if (error.response) {
-        // Ошибка от сервера с ответом
-        const serverError = error.response.data;
-        errorMessage = serverError.message || serverError.error || errorMessage;
-        console.log('Детали ошибки:', serverError);
-      } else if (error.request) {
-        // Запрос был сделан, но ответ не получен
-        errorMessage = 'Сервер не отвечает. Пожалуйста, попробуйте позже.';
-      } else {
-        // Что-то пошло не так при настройке запроса
-        errorMessage = error.message || errorMessage;
-      }
-      
+      // Показываем уведомление об ошибке
       setNotification({
         open: true,
-        message: errorMessage,
+        message: error.response?.data?.error || 'Ошибка при регистрации. Попробуйте снова.',
         severity: 'error'
       });
     } finally {
@@ -209,8 +207,9 @@ const Register = () => {
     }
   };
 
+  // Закрытие уведомления
   const handleCloseNotification = () => {
-    setNotification({ ...notification, open: false });
+    setNotification(prev => ({ ...prev, open: false }));
   };
 
   return (
