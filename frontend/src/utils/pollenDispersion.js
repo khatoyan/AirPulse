@@ -1,50 +1,95 @@
 // Функция для расчета распространения пыльцы с учетом ветра
+// Используется модифицированное гауссовское распределение для моделирования распространения пыльцы
 export const calculatePollenDispersion = (reports, windSpeed, windDirection) => {
-  // Константы для модели
-  const DISPERSION_COEFFICIENT = 0.2; // Коэффициент рассеивания
-  const MAX_DISTANCE = 5000; // Максимальное расстояние распространения в метрах
+  // Константы для модели Гауссовского рассеивания
+  const DISPERSION_COEFFICIENT_X = 0.2; // Горизонтальный коэффициент рассеивания
+  const DISPERSION_COEFFICIENT_Y = 0.15; // Вертикальный коэффициент рассеивания (обычно меньше горизонтального)
+  const MAX_DISTANCE = Math.min(5000 + (windSpeed * 500), 10000); // Максимальное расстояние распространения в метрах, увеличивается с силой ветра
   const WIND_INFLUENCE = 0.3; // Влияние ветра на распространение
+  const STEP_SIZE = 200; // Шаг для создания точек (в метрах)
 
-  // Преобразуем направление ветра из градусов в радианы
-  const windRad = (windDirection * Math.PI) / 180;
+  // Преобразуем направление ветра из градусов в радианы (и меняем на противоположное, т.к. направление ветра - откуда дует)
+  const windRad = ((windDirection + 180) % 360) * Math.PI / 180;
 
-  return reports.map(report => {
+  // Фильтруем только отчеты с растениями, так как именно они являются источниками пыльцы
+  const plantReports = reports.filter(report => report.type === 'plant');
+  
+  if (plantReports.length === 0) {
+    console.log('Нет источников пыльцы (растений) для моделирования распространения');
+    return [];
+  }
+  
+  console.log(`Моделирование распространения пыльцы для ${plantReports.length} источников с учетом ветра ${windSpeed} м/с, направление ${windDirection}°`);
+
+  const allDispersedPoints = plantReports.flatMap(report => {
     const dispersedPoints = [];
     const baseIntensity = report.severity;
-
+    
+    // Учитываем силу ветра в расчете максимальной дистанции
+    const actualMaxDistance = MAX_DISTANCE * (0.5 + (windSpeed * 0.1));
+    
     // Создаем точки распространения в направлении ветра
-    for (let distance = 100; distance <= MAX_DISTANCE; distance += 100) {
-      // Рассчитываем смещение по направлению ветра
-      const dx = distance * Math.sin(windRad) * WIND_INFLUENCE * windSpeed;
-      const dy = distance * Math.cos(windRad) * WIND_INFLUENCE * windSpeed;
+    for (let distance = STEP_SIZE; distance <= actualMaxDistance; distance += STEP_SIZE) {
+      // Рассчитываем смещение по направлению ветра с учетом гауссовского распределения
+      for (let angle = -Math.PI/4; angle <= Math.PI/4; angle += Math.PI/12) {  // Создаем конус рассеивания
+        // Модификация угла с учетом основного направления ветра
+        const modifiedAngle = windRad + angle * (1 - (windSpeed * 0.05));
+        
+        // Модификация расстояния для учета гауссовского распределения
+        const spreadFactor = Math.exp(-(angle * angle) / 0.5);
+        
+        // Боковое отклонение увеличивается с расстоянием
+        const lateralSpread = distance * Math.tan(angle) * (1 - WIND_INFLUENCE);
+        
+        // Рассчитываем смещение с учетом направления ветра
+        const dx = (distance * Math.sin(modifiedAngle) * WIND_INFLUENCE * windSpeed) + lateralSpread * Math.cos(modifiedAngle + Math.PI/2);
+        const dy = (distance * Math.cos(modifiedAngle) * WIND_INFLUENCE * windSpeed) + lateralSpread * Math.sin(modifiedAngle + Math.PI/2);
 
-      // Рассчитываем новые координаты
-      const newLat = report.latitude + (dy / 111111); // 111111 метров = 1 градус широты
-      const newLng = report.longitude + (dx / (111111 * Math.cos(report.latitude * Math.PI / 180)));
+        // Рассчитываем новые координаты (преобразуем метры в градусы)
+        const newLat = report.latitude + (dy / 111111); // 111111 метров = 1 градус широты
+        const newLng = report.longitude + (dx / (111111 * Math.cos(report.latitude * Math.PI / 180)));
 
-      // Рассчитываем интенсивность с учетом расстояния (используем гауссовское распределение)
-      const intensity = baseIntensity * Math.exp(
-        -(distance * distance) / (2 * MAX_DISTANCE * DISPERSION_COEFFICIENT)
-      );
+        // Рассчитываем интенсивность с учетом расстояния и угла (гауссовское распределение)
+        // Интенсивность уменьшается с расстоянием и с отклонением от основного направления
+        const intensity = baseIntensity * 
+          Math.exp(-(distance * distance) / (2 * actualMaxDistance * DISPERSION_COEFFICIENT_X)) *
+          spreadFactor;
 
-      if (intensity > 1) { // Добавляем только значимые точки
-        dispersedPoints.push({
-          latitude: newLat,
-          longitude: newLng,
-          severity: intensity,
-          // Копируем остальные свойства из исходного отчета
-          type: report.type,
-          plantType: report.plantType,
-          description: report.description,
-          createdAt: report.createdAt,
-          // Помечаем как расчетную точку
-          isCalculated: true
-        });
+        if (intensity > 0.5) { // Добавляем только значимые точки
+          dispersedPoints.push({
+            latitude: newLat,
+            longitude: newLng,
+            severity: intensity,
+            // Копируем остальные свойства из исходного отчета
+            type: report.type,
+            plantType: report.plantType,
+            description: `Рассчитанное распространение пыльцы от ${report.plantType || "растения"}`,
+            createdAt: report.createdAt,
+            // Помечаем как расчетную точку
+            isCalculated: true,
+            // Добавляем ссылку на исходный отчет
+            sourceReportId: report.id,
+            // Добавляем метку о расстоянии от источника
+            distance: (distance / 1000).toFixed(2) // в км
+          });
+        }
       }
     }
 
     return dispersedPoints;
-  }).flat();
+  });
+
+  // Ограничиваем количество точек для производительности
+  const MAX_POINTS = 1000;
+  if (allDispersedPoints.length > MAX_POINTS) {
+    console.log(`Ограничиваем количество точек распространения до ${MAX_POINTS} (из ${allDispersedPoints.length})`);
+    // Сортируем по интенсивности и берем только самые интенсивные
+    return allDispersedPoints
+      .sort((a, b) => b.severity - a.severity)
+      .slice(0, MAX_POINTS);
+  }
+
+  return allDispersedPoints;
 };
 
 // Функция для объединения перекрывающихся зон

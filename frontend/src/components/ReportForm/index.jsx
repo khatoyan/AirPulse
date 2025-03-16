@@ -18,7 +18,9 @@ import {
   Radio,
   Snackbar,
   Alert,
-  Autocomplete
+  Autocomplete,
+  Checkbox,
+  Chip
 } from '@mui/material';
 import { useMapStore } from '../../stores/mapStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -43,8 +45,9 @@ function ReportForm({ open, onClose, location }) {
   const [formData, setFormData] = useState({
     type: 'symptom',
     symptom: '',
+    symptoms: [],
     plantType: '',
-    severity: 50,
+    severity: 3,
     description: ''
   });
   const [snackbar, setSnackbar] = useState({
@@ -83,22 +86,56 @@ function ReportForm({ open, onClose, location }) {
     e.preventDefault();
     setLoading(true);
     
-    // Подготовка отчета с учетом модерации
-    const report = {
-      ...location,
-      ...formData,
-      severity: Number(formData.severity),
-      createdAt: new Date().toISOString(),
-    };
-
-    console.log('Отправляем отчет:', report);
-
     try {
+      // Проверка на выбор растения
+      if (reportType === 'plant' && !formData.plantId) {
+        setSnackbar({
+          open: true,
+          message: 'Выберите растение из списка',
+          severity: 'error'
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Проверка на выбор симптома/симптомов
+      if (reportType === 'symptom' && formData.symptoms.length === 0) {
+        setSnackbar({
+          open: true,
+          message: 'Выберите хотя бы один симптом из списка',
+          severity: 'error'
+        });
+        setLoading(false);
+        return;
+      }
+      
+      // Подготовка отчета с учетом модерации
+      const report = {
+        ...location,
+        ...formData,
+        symptom: formData.symptoms.length > 0 ? formData.symptoms.join(', ') : formData.symptom,
+        severity: Number(formData.severity),
+        createdAt: new Date().toISOString(),
+      };
+
+      console.log('Отправляем отчет:', report);
+
       // Если пользователь авторизован, используем его токен
       const authHeader = isAuthenticated ? getAuthHeader() : null;
       
+      // Проверяем наличие токена
+      if (!authHeader) {
+        setSnackbar({
+          open: true,
+          message: 'Необходимо авторизоваться для отправки отчета',
+          severity: 'error'
+        });
+        setLoading(false);
+        return;
+      }
+      
       // Отправляем отчет в API
-      const newReport = await reportsService.createReport(report, authHeader);
+      const newReport = await reportsService.createReport(report);
       
       // Показываем разные сообщения в зависимости от типа отчета
       if (reportType === 'plant' && !isAdmin) {
@@ -121,9 +158,20 @@ function ReportForm({ open, onClose, location }) {
       onClose();
     } catch (error) {
       console.error('Ошибка при добавлении отчета:', error);
+      let errorMessage = 'Ошибка при добавлении отчета';
+      
+      // Пытаемся получить более детальную информацию об ошибке
+      if (error.response && error.response.data) {
+        if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        }
+      }
+      
       setSnackbar({
         open: true,
-        message: 'Ошибка при добавлении отчета',
+        message: errorMessage,
         severity: 'error'
       });
     } finally {
@@ -134,6 +182,15 @@ function ReportForm({ open, onClose, location }) {
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
   };
+
+  // Метки для слайдера интенсивности
+  const severityMarks = [
+    { value: 1, label: '1' },
+    { value: 2, label: '2' },
+    { value: 3, label: '3' },
+    { value: 4, label: '4' },
+    { value: 5, label: '5' },
+  ];
 
   return (
     <>
@@ -154,27 +211,47 @@ function ReportForm({ open, onClose, location }) {
 
             {reportType === 'symptom' ? (
               <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Симптом</InputLabel>
-                <Select
-                  value={formData.symptom}
-                  label="Симптом"
-                  onChange={(e) => setFormData({ ...formData, symptom: e.target.value })}
-                  required
-                >
-                  {symptoms.map((symptom) => (
-                    <MenuItem key={symptom} value={symptom}>
-                      {symptom}
-                    </MenuItem>
-                  ))}
-                </Select>
+                <Autocomplete
+                  multiple
+                  id="symptoms-autocomplete"
+                  options={symptoms}
+                  value={formData.symptoms}
+                  onChange={(_, newValue) => {
+                    setFormData({
+                      ...formData,
+                      symptoms: newValue
+                    });
+                  }}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        label={option}
+                        {...getTagProps({ index })}
+                        key={option}
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Симптомы"
+                      placeholder="Выберите симптомы"
+                      required
+                    />
+                  )}
+                />
               </FormControl>
             ) : (
               <FormControl fullWidth sx={{ mb: 2 }}>
                 <Autocomplete
                   id="plant-autocomplete"
                   options={plants}
-                  getOptionLabel={(option) => option.name || ''}
-                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  getOptionLabel={(option) => option?.name || ''}
+                  isOptionEqualToValue={(option, value) => {
+                    // Проверяем, что оба объекта существуют и у них есть id
+                    if (!option || !value) return false;
+                    return option.id === value.id;
+                  }}
                   renderInput={(params) => (
                     <TextField
                       {...params}
@@ -211,16 +288,16 @@ function ReportForm({ open, onClose, location }) {
 
             <Box sx={{ mb: 2 }}>
               <Typography gutterBottom>
-                {reportType === 'symptom' ? 'Тяжесть симптомов' : 'Интенсивность пыльцы'}
+                {reportType === 'symptom' ? 'Тяжесть симптомов' : 'Интенсивность пыльцы'} (от 1 до 5)
               </Typography>
               <Slider
                 value={formData.severity}
                 onChange={(e, value) => setFormData({ ...formData, severity: value })}
                 valueLabelDisplay="auto"
-                step={10}
-                marks
-                min={0}
-                max={100}
+                step={1}
+                marks={severityMarks}
+                min={1}
+                max={5}
               />
             </Box>
 

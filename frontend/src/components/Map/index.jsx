@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import { useMapStore } from '../../stores/mapStore';
-import { Box, Paper, Typography, Divider, Tooltip } from '@mui/material';
+import { Box, Paper, Typography, Divider, Tooltip, CircularProgress } from '@mui/material';
 import ReportForm from '../ReportForm';
 import './Map.css';
 import { weatherService } from '../../services/api';
@@ -19,8 +19,16 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import plantIcon from '../../assets/icons/plant-marker.svg';
 import symptomIcon from '../../assets/icons/symptom-marker.svg';
 
+// Переопределяем иконку по умолчанию, чтобы избежать дублирования маркеров
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: null,
+  iconUrl: null,
+  shadowUrl: null,
+});
+
 // Создаем кастомные иконки для Leaflet
-const createIcon = (iconUrl, iconSize = [32, 32]) => {
+const createIcon = (iconUrl, iconSize = [16, 16]) => {
   return L.icon({
     iconUrl,
     iconSize,
@@ -33,12 +41,7 @@ const createIcon = (iconUrl, iconSize = [32, 32]) => {
 const ICONS = {
   plant: createIcon(plantIcon),
   symptom: createIcon(symptomIcon),
-  default: L.icon({
-    iconUrl: 'https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [0, -41]
-  })
+  default: createIcon(symptomIcon) // Добавляем дефолтную иконку на случай неопределенного типа
 };
 
 // Компонент для обновления тепловой карты
@@ -47,57 +50,66 @@ const HeatmapLayer = () => {
   const map = useMap();
   const layerRef = useRef();
   const windLayerRef = useRef();
+  const [loading, setLoading] = useState(true);
 
   // Настраиваем функцию для адаптивного радиуса: больше радиус для более интенсивных точек
   const getPointRadius = (intensity) => {
-    return 15 + Math.min(intensity / 10, 15); // От 15 до 30 в зависимости от интенсивности
+    // Теперь intensity в диапазоне 1-5, масштабируем адекватно
+    return 15 + Math.min(intensity * 3, 15); // От 15 до 30 в зависимости от интенсивности
   };
 
-  // Настраиваем цветовую схему для обычной тепловой карты
+  // Настраиваем цветовую схему для обычной тепловой карты (желто-красная)
   const normalGradient = {
-    0.0: 'rgb(0, 255, 255, 0)',
-    0.1: 'rgb(0, 255, 255)',
-    0.2: 'rgb(0, 225, 255)',
-    0.4: 'rgb(0, 200, 255)',
-    0.6: 'rgb(0, 175, 255)',
-    0.8: 'rgb(0, 125, 255)',
-    0.9: 'rgb(0, 75, 255)',
-    1.0: 'rgb(0, 0, 255)'
+    0.0: 'rgba(255, 255, 0, 0)',
+    0.1: 'rgba(255, 255, 0, 0.4)',
+    0.2: 'rgba(255, 230, 0, 0.5)',
+    0.4: 'rgba(255, 200, 0, 0.6)',
+    0.6: 'rgba(255, 150, 0, 0.7)',
+    0.8: 'rgba(255, 100, 0, 0.8)',
+    0.9: 'rgba(255, 50, 0, 0.9)',
+    1.0: 'rgba(255, 0, 0, 1.0)'
   };
 
-  // Настраиваем другую цветовую схему для точек рассеивания
+  // Настраиваем другую цветовую схему для точек рассеивания (оранжево-красная)
   const windGradient = {
     0.0: 'rgba(255, 255, 255, 0)',
-    0.1: 'rgba(255, 255, 0, 0.3)',
-    0.2: 'rgba(255, 240, 0, 0.4)',
-    0.4: 'rgba(255, 220, 0, 0.5)',
-    0.6: 'rgba(255, 180, 0, 0.6)',
-    0.8: 'rgba(255, 140, 0, 0.7)',
-    1.0: 'rgba(255, 80, 0, 0.8)'
+    0.1: 'rgba(255, 240, 0, 0.3)',
+    0.2: 'rgba(255, 210, 0, 0.4)',
+    0.4: 'rgba(255, 180, 0, 0.5)',
+    0.6: 'rgba(255, 150, 0, 0.6)',
+    0.8: 'rgba(255, 100, 0, 0.7)',
+    1.0: 'rgba(255, 50, 0, 0.8)'
   };
 
   useEffect(() => {
-    if (map && reports && reports.length > 0) {
-      const points = reports
-        .filter(r => !r.isCalculated) // Убедимся, что используем только реальные точки
-        .map(r => [
-          r.latitude,
-          r.longitude,
-          Math.max(r.severity / 100, 0.3) // Нормализуем интенсивность
-        ]);
+    if (reports.length > 0) {
+      setLoading(false);
+      
+      if (map && reports) {
+        const points = reports
+          .filter(r => !r.isCalculated) // Убедимся, что используем только реальные точки
+          .map(r => [
+            r.latitude,
+            r.longitude,
+            Math.max(r.severity / 5, 0.2) // Нормализуем интенсивность от 1-5 до 0-1
+          ]);
 
-      if (layerRef.current) {
-        map.removeLayer(layerRef.current);
-      }
+        if (layerRef.current) {
+          map.removeLayer(layerRef.current);
+        }
 
-      if (points.length > 0) {
-        layerRef.current = window.L.heatLayer(points, {
-          radius: 25,
-          blur: 15,
-          maxZoom: 10,
-          gradient: normalGradient,
-        }).addTo(map);
+        if (points.length > 0) {
+          layerRef.current = L.heatLayer(points, {
+            radius: 25,
+            blur: 15,
+            maxZoom: 10,
+            gradient: normalGradient,
+          }).addTo(map);
+        }
       }
+    } else if (loading && reports.length === 0) {
+      // Если данные загружены, но пусты
+      setTimeout(() => setLoading(false), 1000);
     }
 
     return () => {
@@ -105,14 +117,14 @@ const HeatmapLayer = () => {
         map.removeLayer(layerRef.current);
       }
     };
-  }, [map, reports]);
+  }, [map, reports, loading]);
 
   useEffect(() => {
     if (map && windDispersionPoints && windDispersionPoints.length > 0) {
       // Создаем тепловую карту для точек рассеивания ветром
       const windHeatData = windDispersionPoints.map(p => {
         // Получаем интенсивность точки, приведенную к шкале 0-1
-        const intensity = Math.min(p.severity / 100, 1);
+        const intensity = Math.min(p.severity / 5, 1);
         
         // Рассчитываем радиус в зависимости от интенсивности
         const radius = getPointRadius(p.severity);
@@ -129,7 +141,7 @@ const HeatmapLayer = () => {
       }
 
       // Настраиваем отображение для точек рассеивания
-      windLayerRef.current = window.L.heatLayer(windHeatData, {
+      windLayerRef.current = L.heatLayer(windHeatData, {
         radius: 15, // Меньший радиус для точек рассеивания
         blur: 20, // Больше размытие для имитации Гауссовского распределения
         maxZoom: 12,
@@ -145,83 +157,154 @@ const HeatmapLayer = () => {
     };
   }, [map, windDispersionPoints]);
 
+  // Если данные загружаются, показываем индикатор загрузки
+  if (loading) {
+    return (
+      <div className="map-loading-overlay">
+        <CircularProgress size={40} />
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          Загрузка данных...
+        </Typography>
+      </div>
+    );
+  }
+
   return null;
 };
 
 // Добавляем маркеры с иконками в зависимости от типа отчета
 const PointMarkers = () => {
   const { reports } = useMapStore();
-  const map = useMap();
-  const markersLayerRef = useRef(L.layerGroup().addTo(map));
-
+  const [loading, setLoading] = useState(true);
+  
   useEffect(() => {
-    if (!map || reports.length === 0) return;
-
-    // Очищаем слой маркеров
-    markersLayerRef.current.clearLayers();
-
-    // Добавляем маркеры с соответствующими иконками
-    reports.forEach(report => {
-      // Пропускаем расчетные точки для маркеров (для них только тепловая карта)
-      if (report.isCalculated) return;
-      
-      // Определяем, какую иконку использовать
-      const icon = report.type === 'plant' ? ICONS.plant : 
-                  report.type === 'symptom' ? ICONS.symptom : 
-                  ICONS.default;
-      
-      // Создаем маркер с подходящей иконкой
-      const marker = L.marker([report.latitude, report.longitude], { icon });
-      
-      // Добавляем попап при клике
-      const popupContent = `
-        <div class="popup">
-          <h3>${report.type === 'plant' ? report.plantType : 'Симптом'}</h3>
-          <p>Уровень: ${report.severity}/100</p>
-          ${report.symptom ? `<p>Тип симптома: ${report.symptom}</p>` : ''}
-          ${report.description ? `<p>Описание: ${report.description}</p>` : ''}
-          <p>Добавлено: ${new Date(report.createdAt).toLocaleTimeString()}</p>
-        </div>
-      `;
-      marker.bindPopup(popupContent);
-      markersLayerRef.current.addLayer(marker);
-      
-      // Также добавляем небольшой круговой маркер для тепловой карты с низкой прозрачностью
-      const circleMarker = L.circleMarker([report.latitude, report.longitude], {
-        radius: 3,
-        color: report.type === 'plant' ? 'rgba(0, 128, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)',
-        fillColor: report.type === 'plant' ? 'rgba(0, 128, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)',
-        fillOpacity: 0.1,
-        weight: 1
-      });
-      markersLayerRef.current.addLayer(circleMarker);
-    });
-
-    return () => {
-      markersLayerRef.current.clearLayers();
-    };
-  }, [reports, map]);
-
-  return null;
+    if (reports.length > 0) {
+      setLoading(false);
+    } else {
+      setTimeout(() => setLoading(false), 1000);
+    }
+  }, [reports]);
+  
+  // Если данные загружаются, не отображаем маркеры
+  if (loading) return null;
+  
+  return (
+    <>
+      {reports.filter(report => !report.isCalculated).map((report, index) => {
+        const icon = report.type === 'plant' ? ICONS.plant : ICONS.symptom;
+        
+        return (
+          <Marker 
+            key={`marker-${report.id || index}`}
+            position={[report.latitude, report.longitude]} 
+            icon={icon}
+          >
+            <Popup>
+              <div className="report-popup">
+                <h3>Отчет о {report.type === 'symptom' ? 'симптоме' : 'растении'}</h3>
+                <p><strong>Тип:</strong> {report.type === 'symptom' ? report.symptom : report.plantType}</p>
+                <p><strong>Интенсивность:</strong> {report.severity}/5</p>
+                {report.description && <p><strong>Описание:</strong> {report.description}</p>}
+                <p><strong>Дата:</strong> {new Date(report.createdAt).toLocaleDateString()}</p>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
 };
 
+// Функция для получения цвета в зависимости от интенсивности
+const getColorForSeverity = (severity) => {
+  switch (severity) {
+    case 1: return '#3388ff'; // синий
+    case 2: return '#33ff88'; // зеленый
+    case 3: return '#ffff33'; // желтый
+    case 4: return '#ff8833'; // оранжевый
+    case 5: return '#ff3333'; // красный
+    default: return '#3388ff'; // по умолчанию синий
+  }
+};
+
+// Компонент для обработки событий карты
 const MapController = () => {
   const { setSelectedLocation, setShowReportForm } = useMapStore();
   
+  // Обрабатываем клик по карте
   useMapEvents({
     click: (e) => {
-      // Сохраняем координаты в объекте, а не в массиве
+      // Сохраняем координаты в объекте для создания нового отчета
       const coords = {
         latitude: e.latlng.lat,
         longitude: e.latlng.lng
       };
-      console.log('Клик по карте:', coords);
+      console.log('Клик по карте для создания отчета:', coords);
       setSelectedLocation(coords);
-      setShowReportForm(true);
+      setShowReportForm(true); // Показываем форму отчета
     }
   });
 
   return null;
+};
+
+// Компонент для загрузки и обновления данных о погоде
+const WeatherDataLoader = () => {
+  const { setWeatherData } = useMapStore();
+  const map = useMap();
+  const [loading, setLoading] = useState(true);
+  
+  // Функция для загрузки данных о погоде
+  const fetchWeatherData = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Получаем центр карты для запроса погоды
+      const center = map.getCenter();
+      
+      // Загружаем данные о погоде для текущей позиции
+      const weatherData = await weatherService.getCurrentWeather(
+        center.lat,
+        center.lng
+      );
+      
+      setWeatherData(weatherData);
+    } catch (error) {
+      console.error('Ошибка при загрузке данных о погоде:', error);
+      
+      // В случае ошибки, пробуем загрузить последние сохраненные данные
+      try {
+        const latestWeather = await weatherService.getLatestWeather();
+        if (latestWeather) {
+          console.log('Используем последние сохраненные данные о погоде');
+          setWeatherData(latestWeather);
+        }
+      } catch (err) {
+        console.error('Невозможно загрузить даже последние данные о погоде:', err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [map, setWeatherData]);
+  
+  // Инициализация и периодическое обновление данных о погоде
+  useEffect(() => {
+    // Загружаем данные о погоде при первом рендере
+    fetchWeatherData();
+    
+    // Настраиваем интервал обновления (каждые 15 минут)
+    const weatherTimerRef = setInterval(fetchWeatherData, 15 * 60 * 1000);
+    
+    return () => {
+      // Очищаем интервал при размонтировании
+      clearInterval(weatherTimerRef);
+    };
+  }, [fetchWeatherData]);
+  
+  return loading ? (
+    <div className="weather-loading-indicator">
+      <CircularProgress size={24} />
+    </div>
+  ) : null;
 };
 
 // Компонент для отображения индикатора ветра
@@ -315,61 +398,6 @@ const WindIndicator = () => {
       }
     };
   }, [map, weatherData]);
-  
-  return null;
-};
-
-// Компонент для загрузки и обновления данных о погоде
-const WeatherDataLoader = () => {
-  const { setWeatherData } = useMapStore();
-  const map = useMap();
-  const weatherTimerRef = useRef(null);
-  
-  // Функция для загрузки данных о погоде
-  const fetchWeatherData = useCallback(async () => {
-    try {
-      // Получаем центр карты для запроса погоды
-      const center = map.getCenter();
-      
-      // Загружаем данные о погоде для текущей позиции
-      const weatherData = await weatherService.getCurrentWeather(
-        center.lat,
-        center.lng
-      );
-      
-      console.log('Получены данные о погоде:', weatherData);
-      setWeatherData(weatherData);
-    } catch (error) {
-      console.error('Ошибка при загрузке данных о погоде:', error);
-      
-      // В случае ошибки, пробуем загрузить последние сохраненные данные
-      try {
-        const latestWeather = await weatherService.getLatestWeather();
-        if (latestWeather) {
-          console.log('Используем последние сохраненные данные о погоде:', latestWeather);
-          setWeatherData(latestWeather);
-        }
-      } catch (err) {
-        console.error('Невозможно загрузить даже последние данные о погоде:', err);
-      }
-    }
-  }, [map, setWeatherData]);
-  
-  // Инициализация и периодическое обновление данных о погоде
-  useEffect(() => {
-    // Загружаем данные о погоде при первом рендере
-    fetchWeatherData();
-    
-    // Настраиваем интервал обновления (каждые 15 минут)
-    weatherTimerRef.current = setInterval(fetchWeatherData, 15 * 60 * 1000);
-    
-    return () => {
-      // Очищаем интервал при размонтировании
-      if (weatherTimerRef.current) {
-        clearInterval(weatherTimerRef.current);
-      }
-    };
-  }, [fetchWeatherData]);
   
   return null;
 };
@@ -552,28 +580,59 @@ const WeatherInfoPanel = () => {
 
 function Map() {
   const { showReportForm, setShowReportForm, selectedLocation } = useMapStore();
-
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Симулируем начальную загрузку карты
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  if (isLoading) {
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '70vh', 
+          width: '100%',
+          flexDirection: 'column'
+        }}
+      >
+        <CircularProgress size={60} />
+        <Typography variant="h6" sx={{ mt: 2 }}>
+          Загрузка карты AirPulse...
+        </Typography>
+      </Box>
+    );
+  }
+  
   return (
-    <Box sx={{ height: 'calc(100vh - 128px)', width: '100%' }}>
-      <MapContainer
-        center={[55.0084, 82.9357]}
-        zoom={13}
+    <Box sx={{ position: 'relative', width: '100%', height: '70vh' }}>
+      <MapContainer 
+        center={[55.0084, 82.9357]} 
+        zoom={12} 
         style={{ height: '100%', width: '100%' }}
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
+        <WeatherDataLoader />
         <HeatmapLayer />
         <PointMarkers />
         <MapController />
         <WindIndicator />
-        <WeatherDataLoader />
-        <WeatherInfoPanel />
       </MapContainer>
-
+      
+      <WeatherInfoPanel />
+      
       {showReportForm && selectedLocation && (
-        <ReportForm
+        <ReportForm 
           open={showReportForm}
           onClose={() => setShowReportForm(false)}
           location={selectedLocation}
