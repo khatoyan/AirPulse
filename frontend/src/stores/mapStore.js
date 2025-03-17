@@ -8,7 +8,40 @@ export const useMapStore = create((set, get) => ({
   showReportForm: false,
   selectedLocation: null,
   windDispersionPoints: [],
+  selectedAllergen: null,
+  
+  allergenTypes: [
+    { id: 'береза', name: 'Берёза', icon: '🌳' },
+    { id: 'амброзия', name: 'Амброзия', icon: '🌱' },
+    { id: 'сорняки', name: 'Сорняки', icon: '🌿' },
+    { id: 'ольха', name: 'Ольха', icon: '🌲' },
+    { id: 'полынь', name: 'Полынь', icon: '🌾' },
+    { id: 'злаки', name: 'Злаки', icon: '🌾' }
+  ],
+  
+  setSelectedAllergen: (allergen) => {
+    set({ selectedAllergen: allergen });
+    const { reports, weatherData } = get();
+    if (reports.length > 0 && weatherData) {
+      get().generateWindDispersionPoints(reports, weatherData);
+    }
+  },
 
+  getFilteredReports: () => {
+    const { reports, selectedAllergen } = get();
+    
+    if (!selectedAllergen) {
+      return reports;
+    }
+    
+    return reports.filter(report => {
+      if (report.plantType && report.type === 'plant') {
+        return report.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
+      }
+      return false;
+    });
+  },
+  
   setReports: (reports) => {
     const currentReports = get().reports;
     
@@ -53,7 +86,15 @@ export const useMapStore = create((set, get) => ({
       return;
     }
     
-    const plantReports = reports.filter(report => report.type === 'plant');
+    const { selectedAllergen } = get();
+    let plantReports = reports.filter(report => report.type === 'plant');
+    
+    if (selectedAllergen) {
+      plantReports = plantReports.filter(report => 
+        report.plantType && report.plantType.toLowerCase().includes(selectedAllergen.toLowerCase())
+      );
+      console.log(`Фильтрация по аллергену: ${selectedAllergen}, найдено ${plantReports.length} отчетов`);
+    }
     
     if (plantReports.length === 0) {
       set({ windDispersionPoints: [] });
@@ -65,6 +106,42 @@ export const useMapStore = create((set, get) => ({
       const v = Math.random();
       const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
       return z * stdev + mean;
+    };
+    
+    const calculateRemainingPotency = (report) => {
+      const now = new Date();
+      const reportTime = new Date(report.createdAt);
+      const hoursPassed = (now - reportTime) / (1000 * 60 * 60);
+      
+      let halfLife = 24;
+      
+      if (report.plantType) {
+        const plantType = report.plantType.toLowerCase();
+        if (plantType.includes('амброзия')) halfLife = 36;
+        else if (plantType.includes('береза')) halfLife = 18;
+        else if (plantType.includes('злаки')) halfLife = 12;
+        else if (plantType.includes('полынь')) halfLife = 30;
+        else if (plantType.includes('ольха')) halfLife = 20;
+        else if (plantType.includes('сорняки')) halfLife = 24;
+      }
+      
+      const decayFactor = Math.pow(0.7, hoursPassed / halfLife);
+      
+      return decayFactor;
+    };
+    
+    const determineAtmosphericStability = (weather) => {
+      let stability = 3;
+      
+      if (weather.temperature && weather.windSpeed) {
+        if (weather.windSpeed > 8) stability = 2;
+        else if (weather.windSpeed < 2) stability = 5;
+        
+        if (weather.temperature > 30) stability -= 1;
+        else if (weather.temperature < 5) stability += 1;
+      }
+      
+      return Math.max(1, Math.min(6, stability));
     };
     
     const calculateWeatherFactors = (weather) => {
@@ -90,50 +167,72 @@ export const useMapStore = create((set, get) => ({
         }
       }
       
-      const windSpeedFactor = Math.min(1.0 + (weather.windSpeed / 20), 2.0);
+      const windSpeedFactor = Math.min(1.0 + (weather.windSpeed / 15), 2.5);
       
       return { temperatureFactor, humidityFactor, windSpeedFactor };
     };
     
     const weatherFactors = calculateWeatherFactors(weather);
+    const stability = determineAtmosphericStability(weather);
     const dispersionPoints = [];
     
-    plantReports.forEach(plant => {
-      if (plant.severity < 30) return;
+    const fourDaysAgo = new Date();
+    fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+    
+    const recentPlantReports = plantReports.filter(report => {
+      const reportDate = new Date(report.createdAt);
+      return reportDate >= fourDaysAgo;
+    });
+    
+    console.log(`Расчет распространения пыльцы для ${recentPlantReports.length} отчетов о растениях`);
+    
+    const windDegMath = (90 - weather.windDeg + 360) % 360;
+    
+    const windRadMath = (windDegMath * Math.PI) / 180;
+    
+    const windDispersionFactor = Math.max(3 - weather.windSpeed * 0.2, 0.5);
+    
+    recentPlantReports.forEach(plant => {
+      if (plant.severity < 1) return;
+      
+      const ageFactor = calculateRemainingPotency(plant);
+      
+      if (ageFactor < 0.05) return;
       
       const numPoints = Math.floor(
-        (plant.severity / 15) * 
-        weather.windSpeed * 
+        (plant.severity / 1.2) * 
+        Math.max(weather.windSpeed, 1) * 
         weatherFactors.temperatureFactor * 
-        weatherFactors.humidityFactor
+        weatherFactors.humidityFactor * 
+        ageFactor * 
+        5
       );
       
-      const maxDistance = weather.windSpeed * 0.5 * weatherFactors.windSpeedFactor;
-      
-      const windRad = ((weather.windDeg + 180) % 360) * (Math.PI / 180);
-      
-      const angleStdDev = Math.max(5, 15 - weather.windSpeed * 0.5) * (Math.PI / 180);
+      const maxDistance = weather.windSpeed * 0.6 * weatherFactors.windSpeedFactor;
       
       for (let i = 0; i < numPoints; i++) {
-        const distanceFactor = Math.abs(gaussianRandom(0.6, 0.25));
-        const distance = distanceFactor * maxDistance;
+        const distanceFactor = -Math.log(1 - Math.random() * 0.95) * 0.5;
+        const distance = Math.min(distanceFactor * maxDistance, maxDistance);
         
-        const randomAngle = gaussianRandom(0, angleStdDev);
-        const angle = windRad + randomAngle;
+        const perpSigma = (distance * 0.15) * windDispersionFactor;
+        const perpDeviation = gaussianRandom(0, perpSigma);
+        
+        const vertSigma = perpSigma * 0.5;
+        const vertDeviation = gaussianRandom(0, vertSigma);
+        
+        let dx = distance * 1000 * Math.cos(windRadMath) - perpDeviation * Math.sin(windRadMath);
+        let dy = distance * 1000 * Math.sin(windRadMath) + perpDeviation * Math.cos(windRadMath);
         
         const latFactor = 1 / 111000;
         const lngFactor = 1 / (111000 * Math.cos(plant.latitude * (Math.PI / 180)));
         
-        const dx = distance * 1000 * Math.sin(angle) * lngFactor;
-        const dy = distance * 1000 * Math.cos(angle) * latFactor;
+        const lat = plant.latitude + dy * latFactor;
+        const lng = plant.longitude + dx * lngFactor;
         
-        const lat = plant.latitude + dy;
-        const lng = plant.longitude + dx;
+        const decayWithDistance = Math.exp(-1.2 * (distance / maxDistance));
+        const intensity = Math.max(1, plant.severity * decayWithDistance * ageFactor * 1.5);
         
-        const decayFactor = 1.5;
-        const intensity = plant.severity * Math.exp(-decayFactor * (distance / maxDistance));
-        
-        if (intensity > 5) {
+        if (intensity > 0.3) {
           dispersionPoints.push({
             latitude: lat,
             longitude: lng,
@@ -141,13 +240,17 @@ export const useMapStore = create((set, get) => ({
             type: 'calculated',
             isCalculated: true,
             parentId: plant.id,
-            distance: distance.toFixed(2)
+            createdAt: plant.createdAt,
+            plantType: plant.plantType,
+            distance: distance.toFixed(2),
+            perpDeviation: perpDeviation.toFixed(2),
+            vertDeviation: vertDeviation.toFixed(2)
           });
         }
       }
     });
     
-    const maxPointsForPerformance = 1000;
+    const maxPointsForPerformance = 2000;
     let finalPoints = dispersionPoints;
     
     if (dispersionPoints.length > maxPointsForPerformance) {
@@ -157,10 +260,12 @@ export const useMapStore = create((set, get) => ({
     }
     
     console.log(`Сгенерировано ${finalPoints.length} точек рассеивания пыльцы (из ${dispersionPoints.length} рассчитанных)`);
-    console.log('Диапазон расстояний:', {
-      min: Math.min(...finalPoints.map(p => parseFloat(p.distance) || 0)).toFixed(2) + ' км',
-      max: Math.max(...finalPoints.map(p => parseFloat(p.distance) || 0)).toFixed(2) + ' км'
-    });
+    if (finalPoints.length > 0) {
+      console.log('Диапазон расстояний:', {
+        min: Math.min(...finalPoints.map(p => parseFloat(p.distance) || 0)).toFixed(2) + ' км',
+        max: Math.max(...finalPoints.map(p => parseFloat(p.distance) || 0)).toFixed(2) + ' км'
+      });
+    }
     
     set({ windDispersionPoints: finalPoints });
   },

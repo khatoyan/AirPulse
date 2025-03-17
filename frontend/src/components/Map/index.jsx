@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import { useMapStore } from '../../stores/mapStore';
-import { Box, Paper, Typography, Divider, Tooltip, CircularProgress } from '@mui/material';
+import { Box, Paper, Typography, Divider, Tooltip, CircularProgress, ButtonGroup, Button, Stack } from '@mui/material';
 import ReportForm from '../ReportForm';
 import './Map.css';
 import { weatherService } from '../../services/api';
@@ -44,9 +44,87 @@ const ICONS = {
   default: createIcon(symptomIcon) // Добавляем дефолтную иконку на случай неопределенного типа
 };
 
+// Добавляем компонент выбора аллергена
+const AllergenSelector = () => {
+  const { allergenTypes, selectedAllergen, setSelectedAllergen } = useMapStore();
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Проверяем размер экрана при монтировании и при изменении размера окна
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  return (
+    <Paper 
+      elevation={3}
+      sx={{
+        position: 'absolute',
+        top: 'auto',
+        bottom: '10px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 999,
+        py: 1,
+        px: 0.5,
+        borderRadius: '8px',
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        overflow: 'hidden',
+        transition: 'all 0.3s ease',
+        maxWidth: isMobile ? '95%' : '700px',
+        boxShadow: '0 2px 8px rgba(0, 120, 200, 0.2)'
+      }}
+    >
+      <Stack 
+        direction={isMobile ? 'column' : 'row'} 
+        spacing={1}
+        alignItems="center"
+        justifyContent="center"
+        flexWrap="wrap"
+        sx={{ px: 1 }}
+      >
+        {allergenTypes.map((allergen) => (
+          <Button
+            key={allergen.id}
+            variant={selectedAllergen === allergen.id ? "contained" : "outlined"}
+            color="primary"
+            onClick={() => setSelectedAllergen(selectedAllergen === allergen.id ? null : allergen.id)}
+            sx={{
+              borderRadius: '6px',
+              py: 0.5,
+              px: 2,
+              minWidth: isMobile ? '120px' : 'auto',
+              color: selectedAllergen === allergen.id ? '#fff' : '#1976d2',
+              borderColor: '#1976d2',
+              backgroundColor: selectedAllergen === allergen.id ? '#1976d2' : 'transparent',
+              boxShadow: selectedAllergen === allergen.id ? '0 2px 5px rgba(25, 118, 210, 0.3)' : 'none',
+              '&:hover': {
+                backgroundColor: selectedAllergen === allergen.id ? '#1565c0' : 'rgba(25, 118, 210, 0.1)',
+              },
+              m: 0.5,
+              textTransform: 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Typography variant="body2" fontWeight={selectedAllergen === allergen.id ? 600 : 400}>
+              {allergen.name}
+            </Typography>
+          </Button>
+        ))}
+      </Stack>
+    </Paper>
+  );
+};
+
 // Компонент для обновления тепловой карты
 const HeatmapLayer = () => {
-  const { reports, windDispersionPoints } = useMapStore();
+  const { reports, windDispersionPoints, selectedAllergen } = useMapStore();
   const map = useMap();
   const layerRef = useRef();
   const windLayerRef = useRef();
@@ -58,27 +136,26 @@ const HeatmapLayer = () => {
     return 15 + Math.min(intensity * 3, 15); // От 15 до 30 в зависимости от интенсивности
   };
 
-  // Настраиваем цветовую схему для обычной тепловой карты (желто-красная)
+  // Настраиваем цветовую схему для обычной тепловой карты (зелено-желто-красная)
   const normalGradient = {
-    0.0: 'rgba(255, 255, 0, 0)',
-    0.1: 'rgba(255, 255, 0, 0.4)',
-    0.2: 'rgba(255, 230, 0, 0.5)',
-    0.4: 'rgba(255, 200, 0, 0.6)',
-    0.6: 'rgba(255, 150, 0, 0.7)',
-    0.8: 'rgba(255, 100, 0, 0.8)',
-    0.9: 'rgba(255, 50, 0, 0.9)',
-    1.0: 'rgba(255, 0, 0, 1.0)'
+    0.0: 'rgba(0, 255, 0, 0)',
+    0.2: 'rgba(150, 255, 0, 0.15)',
+    0.4: 'rgba(255, 255, 0, 0.2)',
+    0.6: 'rgba(255, 200, 0, 0.3)',
+    0.8: 'rgba(255, 100, 0, 0.4)',
+    0.9: 'rgba(255, 50, 0, 0.5)',
+    1.0: 'rgba(255, 0, 0, 0.6)'
   };
 
-  // Настраиваем другую цветовую схему для точек рассеивания (оранжево-красная)
+  // Настраиваем другую цветовую схему для точек рассеивания (зелено-желто-красная)
   const windGradient = {
-    0.0: 'rgba(255, 255, 255, 0)',
-    0.1: 'rgba(255, 240, 0, 0.3)',
-    0.2: 'rgba(255, 210, 0, 0.4)',
-    0.4: 'rgba(255, 180, 0, 0.5)',
-    0.6: 'rgba(255, 150, 0, 0.6)',
-    0.8: 'rgba(255, 100, 0, 0.7)',
-    1.0: 'rgba(255, 50, 0, 0.8)'
+    0.0: 'rgba(0, 255, 0, 0)',
+    0.2: 'rgba(150, 255, 0, 0.15)',
+    0.4: 'rgba(255, 255, 0, 0.2)',
+    0.6: 'rgba(255, 200, 0, 0.3)',
+    0.8: 'rgba(255, 100, 0, 0.4)',
+    0.9: 'rgba(255, 50, 0, 0.5)',
+    1.0: 'rgba(255, 0, 0, 0.6)'
   };
 
   useEffect(() => {
@@ -86,13 +163,30 @@ const HeatmapLayer = () => {
       setLoading(false);
       
       if (map && reports) {
-        const points = reports
-          .filter(r => !r.isCalculated) // Убедимся, что используем только реальные точки
-          .map(r => [
-            r.latitude,
-            r.longitude,
-            Math.max(r.severity / 5, 0.2) // Нормализуем интенсивность от 1-5 до 0-1
-          ]);
+        // Фильтруем точки, исключаем рассчитанные и применяем фильтр по аллергену
+        const filteredReports = reports.filter(r => {
+          // Исключаем рассчитанные точки
+          if (r.isCalculated) return false;
+          
+          // Если аллерген выбран и это растение, проверяем соответствие
+          if (selectedAllergen && r.type === 'plant' && r.plantType) {
+            return r.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
+          }
+          
+          // Если аллерген выбран, но это не растение, исключаем
+          if (selectedAllergen && r.type !== 'plant') return false;
+          
+          // Если аллерген не выбран, включаем все точки
+          return true;
+        });
+        
+        console.log(`Отображение ${filteredReports.length} точек на тепловой карте (из ${reports.length} отчетов)`);
+        
+        const points = filteredReports.map(r => [
+          r.latitude,
+          r.longitude,
+          Math.max(r.severity / 5, 0.3) // Увеличиваем минимальную интенсивность с 0.2 до 0.3
+        ]);
 
         if (layerRef.current) {
           map.removeLayer(layerRef.current);
@@ -100,9 +194,10 @@ const HeatmapLayer = () => {
 
         if (points.length > 0) {
           layerRef.current = L.heatLayer(points, {
-            radius: 25,
-            blur: 15,
-            maxZoom: 10,
+            radius: 40, // Немного уменьшаем с 50 до 40
+            blur: 50, // Уменьшаем с 70 до 50 для более четкого отображения
+            maxZoom: 18,
+            minOpacity: 0.4, // Увеличиваем с 0.3 до 0.4
             gradient: normalGradient,
           }).addTo(map);
         }
@@ -117,7 +212,7 @@ const HeatmapLayer = () => {
         map.removeLayer(layerRef.current);
       }
     };
-  }, [map, reports, loading]);
+  }, [map, reports, loading, selectedAllergen]); // Добавляем зависимость от selectedAllergen
 
   useEffect(() => {
     if (map && windDispersionPoints && windDispersionPoints.length > 0) {
@@ -126,13 +221,13 @@ const HeatmapLayer = () => {
         // Получаем интенсивность точки, приведенную к шкале 0-1
         const intensity = Math.min(p.severity / 5, 1);
         
-        // Рассчитываем радиус в зависимости от интенсивности
-        const radius = getPointRadius(p.severity);
+        // Интенсивность увеличиваем для лучшей видимости
+        const boostedIntensity = Math.min(intensity * 1.5, 1);
         
         return [
           p.latitude,
           p.longitude,
-          intensity // Значение интенсивности для тепловой карты
+          boostedIntensity // Увеличенное значение интенсивности для тепловой карты
         ];
       });
 
@@ -140,14 +235,18 @@ const HeatmapLayer = () => {
         map.removeLayer(windLayerRef.current);
       }
 
+      console.log(`Отображение ${windHeatData.length} точек рассеивания ветром`);
+
       // Настраиваем отображение для точек рассеивания
       windLayerRef.current = L.heatLayer(windHeatData, {
-        radius: 15, // Меньший радиус для точек рассеивания
-        blur: 20, // Больше размытие для имитации Гауссовского распределения
-        maxZoom: 12,
+        radius: 30, // Уменьшаем радиус для более четкого отображения
+        blur: 40, // Уменьшаем размытие для более четкого отображения
+        maxZoom: 18,
         gradient: windGradient,
-        minOpacity: 0.2 // Минимальная непрозрачность для лучшей видимости
+        minOpacity: 0.4 // Увеличиваем минимальную непрозрачность для лучшей видимости
       }).addTo(map);
+    } else {
+      console.log(`Нет точек рассеивания ветром для отображения (${windDispersionPoints?.length || 0} точек)`);
     }
 
     return () => {
@@ -174,7 +273,7 @@ const HeatmapLayer = () => {
 
 // Добавляем маркеры с иконками в зависимости от типа отчета
 const PointMarkers = () => {
-  const { reports } = useMapStore();
+  const { reports, selectedAllergen } = useMapStore();
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
@@ -188,9 +287,26 @@ const PointMarkers = () => {
   // Если данные загружаются, не отображаем маркеры
   if (loading) return null;
   
+  // Фильтруем отчеты по выбранному аллергену
+  const filteredReports = reports.filter(report => {
+    // Показываем только точки, которые не рассчитаны
+    if (report.isCalculated) return false;
+    
+    // Если не выбран аллерген, показываем все отчеты
+    if (!selectedAllergen) return true;
+    
+    // Для отчетов типа "plant" проверяем соответствие выбранному аллергену
+    if (report.type === 'plant' && report.plantType) {
+      return report.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
+    }
+    
+    // Для отчетов типа "symptom" всегда показываем
+    return report.type === 'symptom';
+  });
+  
   return (
     <>
-      {reports.filter(report => !report.isCalculated).map((report, index) => {
+      {filteredReports.map((report, index) => {
         const icon = report.type === 'plant' ? ICONS.plant : ICONS.symptom;
         
         return (
@@ -320,7 +436,7 @@ const WindIndicator = () => {
     if (!windControlRef.current) {
       const WindControl = L.Control.extend({
         options: {
-          position: 'topright'
+          position: 'topleft' // Изменяем позицию на topleft
         },
         
         onAdd: function() {
@@ -328,13 +444,15 @@ const WindIndicator = () => {
           container.style.background = 'white';
           container.style.padding = '10px';
           container.style.borderRadius = '5px';
-          container.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+          container.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
           container.style.width = '150px';
+          container.style.margin = '10px';
           
           const title = L.DomUtil.create('div', 'wind-title', container);
           title.innerHTML = 'Ветер';
           title.style.fontWeight = 'bold';
           title.style.marginBottom = '5px';
+          title.style.color = '#1976d2';
           
           const content = L.DomUtil.create('div', 'wind-content', container);
           content.innerHTML = 'Нет данных';
@@ -345,6 +463,7 @@ const WindIndicator = () => {
           arrow.style.textAlign = 'center';
           arrow.style.transform = 'rotate(0deg)';
           arrow.style.marginTop = '5px';
+          arrow.style.color = '#1976d2';
           
           container.title = 'Направление и скорость ветра';
           
@@ -630,6 +749,7 @@ function Map() {
       </MapContainer>
       
       <WeatherInfoPanel />
+      <AllergenSelector />
       
       {showReportForm && selectedLocation && (
         <ReportForm 
