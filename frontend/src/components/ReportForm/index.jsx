@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -20,7 +20,8 @@ import {
   Alert,
   Autocomplete,
   Checkbox,
-  Chip
+  Chip,
+  ClickAwayListener
 } from '@mui/material';
 import { useMapStore } from '../../stores/mapStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -36,20 +37,33 @@ const symptoms = [
   'Затрудненное дыхание'
 ];
 
-function ReportForm({ open, onClose, location }) {
-  const { reports, setReports } = useMapStore();
+function ReportForm({ location, onClose }) {
+  const { addReport, toggleReportForm, showReportForm } = useMapStore();
   const { isAuthenticated, isAdmin, getAuthHeader } = useAuthStore();
   const [reportType, setReportType] = useState('symptom');
   const [plants, setPlants] = useState([]);
   const [loading, setLoading] = useState(false);
+  const selectRef = useRef(null);
+  
+  console.log('Компонент ReportForm рендерится. Местоположение:', location);
+
+  // Инициализируем состояние формы
   const [formData, setFormData] = useState({
     type: 'symptom',
     symptom: '',
-    symptoms: [],
+    symptoms: [], // Пустой массив для множественного выбора симптомов
     plantType: '',
+    plantId: null,
+    plantObj: null, // Добавляем объект растения для Autocomplete
     severity: 3,
-    description: ''
+    allergen: '',
+    note: '',
+    description: '', // Добавляем поле для описания
+    isAnonymous: !isAuthenticated 
   });
+
+  console.log('Начальное состояние формы:', formData);
+
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
@@ -58,17 +72,52 @@ function ReportForm({ open, onClose, location }) {
 
   // Загрузка списка растений
   useEffect(() => {
+    console.log('Инициализация загрузки растений...');
+    
     const fetchPlants = async () => {
       try {
+        console.log('Запрос списка растений с бэкенда...');
         const data = await plantsService.getAllPlants();
-        console.log('Загруженные растения:', data);
-        setPlants(data);
+        console.log('Ответ от сервера (растения):', data);
+        
+        if (Array.isArray(data) && data.length > 0) {
+          console.log(`Успешно загружено ${data.length} растений`);
+          setPlants(data);
+        } else {
+          console.error('Получен пустой или некорректный список растений:', data);
+          // Для отладки создаем моковый список растений
+          const mockPlants = [
+            { id: 1, name: 'Береза' },
+            { id: 2, name: 'Тополь' },
+            { id: 3, name: 'Ольха' },
+            { id: 4, name: 'Амброзия' }
+          ];
+          console.log('Используем моковые данные для отладки:', mockPlants);
+          setPlants(mockPlants);
+          
+          setSnackbar({
+            open: true,
+            message: 'Не удалось загрузить список растений. Используем тестовые данные.',
+            severity: 'warning'
+          });
+        }
       } catch (error) {
         console.error('Ошибка при загрузке растений:', error);
+        
+        // Для отладки создаем моковый список растений
+        const mockPlants = [
+          { id: 1, name: 'Береза' },
+          { id: 2, name: 'Тополь' },
+          { id: 3, name: 'Ольха' },
+          { id: 4, name: 'Амброзия' }
+        ];
+        console.log('Ошибка API. Используем моковые данные для отладки:', mockPlants);
+        setPlants(mockPlants);
+        
         setSnackbar({
           open: true,
-          message: 'Не удалось загрузить список растений',
-          severity: 'error'
+          message: 'Не удалось загрузить список растений. Используем тестовые данные.',
+          severity: 'warning'
         });
       }
     };
@@ -78,100 +127,130 @@ function ReportForm({ open, onClose, location }) {
 
   const handleTypeChange = (event) => {
     const type = event.target.value;
+    console.log(`Изменение типа отчета на: ${type}`);
     setReportType(type);
-    setFormData({ ...formData, type });
+    
+    // Сбрасываем поля, относящиеся к определенному типу, при переключении
+    if (type === 'symptom') {
+      setFormData({
+        ...formData,
+        type,
+        plantType: '',
+        plantId: null,
+        plantObj: null
+      });
+    } else {
+      setFormData({
+        ...formData,
+        type,
+        symptoms: []
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!location || !location.latitude || !location.longitude) {
+      console.error('Ошибка: местоположение не определено', location);
+      setSnackbar({
+        open: true,
+        message: 'Ошибка: местоположение не определено',
+        severity: 'error'
+      });
+      return;
+    }
+    
+    // Проверяем обязательные поля
+    if (reportType === 'symptom' && (!formData.symptoms || formData.symptoms.length === 0)) {
+      setSnackbar({
+        open: true,
+        message: 'Пожалуйста, выберите хотя бы один симптом',
+        severity: 'error'
+      });
+      return;
+    }
+    
+    if (reportType === 'plant' && !formData.plantType) {
+      setSnackbar({
+        open: true,
+        message: 'Пожалуйста, выберите тип растения',
+        severity: 'error'
+      });
+      return;
+    }
+    
     setLoading(true);
     
     try {
-      // Проверка на выбор растения
-      if (reportType === 'plant' && !formData.plantId) {
-        setSnackbar({
-          open: true,
-          message: 'Выберите растение из списка',
-          severity: 'error'
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Проверка на выбор симптома/симптомов
-      if (reportType === 'symptom' && formData.symptoms.length === 0) {
-        setSnackbar({
-          open: true,
-          message: 'Выберите хотя бы один симптом из списка',
-          severity: 'error'
-        });
-        setLoading(false);
-        return;
-      }
-      
-      // Подготовка отчета с учетом модерации
-      const report = {
-        ...location,
-        ...formData,
-        symptom: formData.symptoms.length > 0 ? formData.symptoms.join(', ') : formData.symptom,
-        severity: Number(formData.severity),
-        createdAt: new Date().toISOString(),
+      // Подготавливаем данные отчета
+      const reportData = {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        type: reportType,
+        severity: formData.severity,
+        note: formData.description || formData.note || null,
+        anonymous: formData.isAnonymous
       };
-
-      console.log('Отправляем отчет:', report);
-
-      // Если пользователь авторизован, используем его токен
-      const authHeader = isAuthenticated ? getAuthHeader() : null;
       
-      // Проверяем наличие токена
-      if (!authHeader) {
-        setSnackbar({
-          open: true,
-          message: 'Необходимо авторизоваться для отправки отчета',
-          severity: 'error'
-        });
-        setLoading(false);
-        return;
+      // Добавляем специфичные для типа отчета данные
+      if (reportType === 'symptom') {
+        // Для симптомов используем первый выбранный симптом как основной
+        reportData.symptom = formData.symptoms[0]; // Берем первый симптом как основной
+        
+        // Преобразуем массив симптомов в строку, если их несколько
+        if (formData.symptoms.length > 1) {
+          reportData.note = (reportData.note ? reportData.note + ". " : "") + 
+                           "Дополнительные симптомы: " + formData.symptoms.slice(1).join(", ");
+        }
+        
+        // Устанавливаем аллерген по умолчанию для симптомов
+        reportData.allergen = "general";
+      } else if (reportType === 'plant') {
+        reportData.plantType = formData.plantType;
+        reportData.plantId = formData.plantId;
+        reportData.allergen = formData.plantType.toLowerCase();
       }
       
-      // Отправляем отчет в API
-      const newReport = await reportsService.createReport(report);
+      console.log('Отправка отчета с данными:', reportData);
       
-      // Показываем разные сообщения в зависимости от типа отчета
-      if (reportType === 'plant' && !isAdmin) {
+      // Отправляем отчет
+      const createdReport = await reportsService.createReport(reportData);
+      console.log('Получен ответ от сервера:', createdReport);
+      
+      // Добавляем отчет в состояние
+      if (createdReport) {
+        addReport(createdReport);
+        
         setSnackbar({
           open: true,
-          message: 'Отчет отправлен на модерацию и появится на карте после проверки администратором',
-          severity: 'info'
-        });
-      } else {
-        setSnackbar({
-          open: true,
-          message: 'Отчет успешно добавлен и отображается на карте',
+          message: 'Ваш отчет успешно отправлен! Спасибо за помощь в мониторинге аллергии.',
           severity: 'success'
         });
+        
+        // Сбрасываем форму
+        setFormData({
+          type: 'symptom',
+          symptom: '',
+          symptoms: [],
+          plantType: '',
+          severity: 3,
+          allergen: '',
+          note: '',
+          isAnonymous: !isAuthenticated
+        });
+        
+        // Закрываем форму с задержкой
+        setTimeout(() => {
+          toggleReportForm(false);
+        }, 1500);
       }
-      
-      // Оповещаем о создании отчета для обновления данных
-      window.dispatchEvent(new CustomEvent('report_created'));
-      
-      onClose();
     } catch (error) {
-      console.error('Ошибка при добавлении отчета:', error);
-      let errorMessage = 'Ошибка при добавлении отчета';
-      
-      // Пытаемся получить более детальную информацию об ошибке
-      if (error.response && error.response.data) {
-        if (error.response.data.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.data.error) {
-          errorMessage = error.response.data.error;
-        }
-      }
+      console.error('Ошибка при отправке отчета:', error);
       
       setSnackbar({
         open: true,
-        message: errorMessage,
+        message: 'Произошла ошибка при отправке отчета. Пожалуйста, попробуйте еще раз.',
         severity: 'error'
       });
     } finally {
@@ -192,10 +271,86 @@ function ReportForm({ open, onClose, location }) {
     { value: 5, label: '5' },
   ];
 
+  // Функция для проверки стилей и отладки
+  const inspectSelectElement = () => {
+    if (selectRef.current) {
+      console.log('Элемент Select:', selectRef.current);
+      const computedStyle = window.getComputedStyle(selectRef.current);
+      console.log('Вычисленные стили для Select:', {
+        display: computedStyle.display,
+        visibility: computedStyle.visibility,
+        position: computedStyle.position,
+        zIndex: computedStyle.zIndex,
+        opacity: computedStyle.opacity,
+        pointerEvents: computedStyle.pointerEvents
+      });
+    } else {
+      console.log('Select ref не доступен');
+    }
+  };
+
+  // Тестовая функция для открытия выпадающего списка программно
+  const forceOpenSelect = () => {
+    console.log('Пытаемся программно открыть выпадающий список');
+    if (selectRef.current) {
+      try {
+        // Пытаемся программно активировать элемент
+        selectRef.current.click();
+        selectRef.current.focus();
+        console.log('Фокус установлен на Select');
+      } catch (e) {
+        console.error('Ошибка при программном открытии списка:', e);
+      }
+    }
+  };
+
+  // Проверяем стили после монтирования
+  useEffect(() => {
+    setTimeout(() => {
+      inspectSelectElement();
+    }, 500);
+  }, []);
+
+  // Отладка открытия Select
+  const handleSelectFocus = (e) => {
+    console.log('Select получил фокус:', e);
+  };
+
+  const handleSelectClick = (e) => {
+    console.log('Click на Select:', e);
+  };
+
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-        <DialogTitle>Добавить отчет</DialogTitle>
+      <Dialog 
+        open={true} 
+        onClose={onClose} 
+        maxWidth="sm" 
+        fullWidth
+        sx={{
+          zIndex: 2000,
+          '& .MuiDialog-paper': {
+            borderRadius: 2,
+            border: '3px solid #1976d2',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+            backgroundColor: 'white',
+            opacity: 1
+          }
+        }}
+        disablePortal={false}
+        container={document.body}
+      >
+        <DialogTitle>
+          Добавить отчет
+          <Button 
+            size="small" 
+            onClick={forceOpenSelect} 
+            variant="outlined" 
+            sx={{ ml: 2 }}
+          >
+            Тест списка
+          </Button>
+        </DialogTitle>
         <DialogContent>
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
             <FormControl component="fieldset" sx={{ mb: 2 }}>
@@ -211,68 +366,85 @@ function ReportForm({ open, onClose, location }) {
 
             {reportType === 'symptom' ? (
               <FormControl fullWidth sx={{ mb: 2 }}>
-                <Autocomplete
-                  multiple
-                  id="symptoms-autocomplete"
-                  options={symptoms}
-                  value={formData.symptoms}
-                  onChange={(_, newValue) => {
-                    setFormData({
-                      ...formData,
-                      symptoms: newValue
-                    });
-                  }}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        label={option}
-                        {...getTagProps({ index })}
-                        key={option}
-                      />
-                    ))
-                  }
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Симптомы"
-                      placeholder="Выберите симптомы"
-                      required
-                    />
-                  )}
-                />
+                <Typography variant="subtitle1" gutterBottom>
+                  Симптомы *
+                </Typography>
+                
+                {/* Нативный HTML select для симптомов */}
+                <div style={{ border: '1px solid #ccc', padding: '10px', borderRadius: '4px' }}>
+                  {symptoms.map((symptom) => (
+                    <div key={symptom} style={{ margin: '8px 0' }}>
+                      <label style={{ display: 'flex', alignItems: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.symptoms.includes(symptom)}
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            const updatedSymptoms = isChecked
+                              ? [...formData.symptoms, symptom]
+                              : formData.symptoms.filter(s => s !== symptom);
+                            
+                            console.log('Обновленные симптомы:', updatedSymptoms);
+                            setFormData({
+                              ...formData,
+                              symptoms: updatedSymptoms
+                            });
+                          }}
+                          style={{ marginRight: '8px' }}
+                        />
+                        {symptom}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Отображение выбранных симптомов */}
+                {formData.symptoms.length > 0 && (
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="caption">
+                      Выбрано: {formData.symptoms.join(', ')}
+                    </Typography>
+                  </Box>
+                )}
               </FormControl>
             ) : (
               <FormControl fullWidth sx={{ mb: 2 }}>
-                <Autocomplete
-                  id="plant-autocomplete"
-                  options={plants}
-                  getOptionLabel={(option) => option?.name || ''}
-                  isOptionEqualToValue={(option, value) => {
-                    // Проверяем, что оба объекта существуют и у них есть id
-                    if (!option || !value) return false;
-                    return option.id === value.id;
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Тип растения"
-                      required
-                      error={plants.length === 0}
-                      helperText={plants.length === 0 ? 'Не удалось загрузить список растений' : ''}
-                    />
-                  )}
-                  onChange={(_, newValue) => {
-                    console.log('Выбранное растение:', newValue);
+                <Typography variant="subtitle1" gutterBottom>
+                  Тип растения *
+                </Typography>
+                
+                {/* Нативный HTML select для растений */}
+                <select
+                  value={formData.plantType}
+                  onChange={(e) => {
+                    const selectedValue = e.target.value;
+                    const selectedPlant = plants.find(p => p.name === selectedValue);
+                    console.log('Выбранное растение:', selectedPlant);
+                    
                     setFormData({
                       ...formData,
-                      plantType: newValue?.name || '',
-                      plantId: newValue?.id || null
+                      plantType: selectedValue,
+                      plantId: selectedPlant?.id || null,
+                      plantObj: selectedPlant || null
                     });
                   }}
-                  loading={plants.length === 0}
-                  loadingText="Загрузка растений..."
-                  noOptionsText="Растения не найдены"
-                />
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    fontSize: '16px'
+                  }}
+                  required
+                >
+                  <option value="">-- Выберите растение --</option>
+                  {plants.map((plant) => (
+                    <option key={plant.id} value={plant.name}>
+                      {plant.name}
+                    </option>
+                  ))}
+                </select>
+                
                 {plants.length === 0 && (
                   <Typography variant="caption" color="error" sx={{ mt: 1 }}>
                     Не удалось загрузить список растений. Пожалуйста, повторите попытку позже.
@@ -306,7 +478,7 @@ function ReportForm({ open, onClose, location }) {
               multiline
               rows={4}
               label="Дополнительное описание"
-              value={formData.description}
+              value={formData.description || ''}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               sx={{ mb: 2 }}
             />

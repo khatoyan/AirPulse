@@ -1,5 +1,11 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { 
+  setupRequestInterceptor, 
+  setupResponseInterceptor, 
+  getAuthHeader, 
+  withAuth 
+} from './interceptors';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -10,130 +16,9 @@ const api = axios.create({
   }
 });
 
-// Утилитарная функция для получения заголовка авторизации из стора
-const getAuthHeader = () => {
-  // Получаем данные аутентификации из localStorage
-  try {
-    const authData = localStorage.getItem('auth-storage');
-    if (!authData) return null;
-    
-    const { state } = JSON.parse(authData);
-    if (!state || !state.token) return null;
-    
-    return { Authorization: `Bearer ${state.token}` };
-  } catch (error) {
-    console.error('Ошибка при получении токена аутентификации:', error);
-    return null;
-  }
-};
-
-// Добавляем функцию проверки срока действия токена
-const isTokenExpired = (token) => {
-  try {
-    // Получаем payload из JWT токена
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    // Проверяем срок действия
-    return payload.exp * 1000 < Date.now();
-  } catch (error) {
-    console.error('Ошибка при проверке срока действия токена:', error);
-    return true; // В случае ошибки считаем токен истекшим
-  }
-};
-
-// Добавляем обработчик перехватчиков запросов и ответов
-api.interceptors.request.use(
-  (config) => {
-    // Добавляем заголовок авторизации к запросу, если доступен
-    const authHeader = getAuthHeader();
-    if (authHeader) {
-      // Проверяем срок действия токена
-      const token = authHeader.Authorization.split(' ')[1];
-      if (isTokenExpired(token)) {
-        // Если токен истек, выходим из системы
-        localStorage.removeItem('auth-storage');
-        // Перезагружаем страницу для обновления состояния
-        window.location.reload();
-        return Promise.reject(new Error('Срок действия сессии истек. Пожалуйста, войдите снова.'));
-      }
-      config.headers = { ...config.headers, ...authHeader };
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Добавляем обработчик ответов для единой обработки ошибок
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Стандартизированное сообщение об ошибке
-    let errorMessage = 'Произошла ошибка при обработке запроса';
-    
-    // Если есть ответ сервера с сообщением об ошибке
-    if (error.response && error.response.data) {
-      if (error.response.data.message) {
-        errorMessage = error.response.data.message;
-      } else if (typeof error.response.data === 'string') {
-        errorMessage = error.response.data;
-      }
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    // Обрабатываем особые коды ошибок
-    if (error.response) {
-      switch (error.response.status) {
-        case 401:
-          // Неавторизованный доступ
-          localStorage.removeItem('auth-storage');
-          toast.error('Сессия истекла. Пожалуйста, войдите снова');
-          // Перенаправляем на страницу входа, если не там
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
-          }
-          break;
-        case 403:
-          // Запрещенный доступ
-          toast.error('У вас нет прав на выполнение этой операции');
-          break;
-        case 404:
-          // Ресурс не найден
-          toast.error('Запрашиваемый ресурс не найден');
-          break;
-        case 500:
-          // Ошибка сервера
-          toast.error('Ошибка сервера. Пожалуйста, попробуйте позже');
-          break;
-        default:
-          // Другие ошибки
-          toast.error(errorMessage);
-      }
-    } else {
-      // Сетевая ошибка или другая проблема
-      toast.error(`Ошибка сети: ${errorMessage}`);
-    }
-    
-    return Promise.reject(error);
-  }
-);
-
-// Функция для проверки и добавления заголовка авторизации
-const withAuth = (config = {}) => {
-  const authHeader = getAuthHeader();
-  if (!authHeader) {
-    // Если нет авторизации, но она требуется для запроса
-    toast.error('Необходимо авторизоваться для выполнения данного запроса');
-    return Promise.reject(new Error('Требуется авторизация'));
-  }
-  
-  return { 
-    ...config, 
-    headers: { 
-      ...config.headers,
-      ...authHeader 
-    } 
-  };
-};
+// Настраиваем перехватчики
+setupRequestInterceptor(api);
+setupResponseInterceptor(api);
 
 // Сервис аутентификации
 export const authService = {
@@ -318,17 +203,34 @@ export const plantsService = {
 
 // Сервис погоды
 export const weatherService = {
-  // Получить текущие погодные данные
+  // Получить текущую погоду
   getCurrentWeather: async (lat, lon) => {
     const { data } = await api.get('/weather/current', {
       params: { lat, lon }
     });
     return data;
   },
-
-  // Получить последние погодные данные
-  getLatestWeather: async () => {
-    const { data } = await api.get('/weather/latest');
-    return data;
+  
+  // Получить прогноз погоды на 24 часа
+  getHourlyForecast: async (lat, lon) => {
+    try {
+      console.log(`Запрос прогноза погоды для координат: ${lat}, ${lon}`);
+      
+      const { data } = await api.get('/weather/forecast', {
+        params: { lat, lon }
+      });
+      
+      if (!data || !Array.isArray(data)) {
+        console.error('Получены некорректные данные прогноза:', data);
+        return [];
+      }
+      
+      console.log(`Получен прогноз на ${data.length} часов`);
+      return data;
+    } catch (error) {
+      console.error('Ошибка при получении прогноза погоды:', error);
+      // Возвращаем пустой массив в случае ошибки
+      return [];
+    }
   }
 }; 
