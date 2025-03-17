@@ -17,7 +17,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 // Импортируем компоненты временной шкалы
 import TimeSlider from './TimeSlider';
-import { normalizeIntensity, getPointRadius } from '../../utils/mapUtils';
+import { normalizeIntensity, getPointRadius, getColorForSeverity, normalizeIntensityWithTime } from '../../utils/mapUtils';
 
 // Импорт иконок для меток
 import plantIcon from '../../assets/icons/plant-marker.svg';
@@ -162,7 +162,7 @@ const HeatmapLayer = () => {
         return [
           report.latitude,
           report.longitude,
-          normalizeIntensity(report.severity)
+          normalizeIntensityWithTime(report.severity, report.timestamp)
         ];
       });
 
@@ -213,7 +213,7 @@ const WindDispersionLayer = () => {
         return [
           point.latitude,
           point.longitude,
-          normalizeIntensity(point.severity)
+          normalizeIntensityWithTime(point.severity, point.timestamp)
         ];
       });
       

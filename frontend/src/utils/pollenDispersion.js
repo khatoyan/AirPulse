@@ -37,10 +37,10 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
   }
   
   // Коэффициенты для расчета
-  const windScaleFactor = 300; // Уменьшенный коэффициент влияния скорости ветра для более реалистичного распространения
-  const baseRadius = 1500;  // Оптимизированный базовый радиус в метрах
-  const pointsPerSource = 10; // Уменьшенное количество точек для лучшей производительности
-  const turbulenceFactor = 0.12; // Уменьшенный коэффициент турбулентности для более реалистичного рассеивания
+  const windScaleFactor = 800; // Увеличенный коэффициент влияния скорости ветра для более заметного распространения
+  const baseRadius = 2000;  // Увеличенный базовый радиус в метрах
+  const pointsPerSource = 15; // Увеличено количество точек для лучшего покрытия
+  const turbulenceFactor = 0.2; // Увеличенный коэффициент турбулентности для более заметного рассеивания
   
   const dispersedPoints = [];
   
@@ -92,8 +92,6 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
       const totalYOffset = yOffset * distanceFactor + randomDistortY;
       
       // Расчет новых координат с учетом смещения
-      // Примерный перевод метров в градусы: 111000 метров ≈ 1 градус широты
-      // Для долготы конвертация зависит от широты: 111000 * cos(lat) метров ≈ 1 градус долготы
       const latFactor = 1 / 111000;
       const lngFactor = 1 / (111000 * Math.cos((lat * Math.PI) / 180));
       
@@ -108,7 +106,7 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
       
       // Расчет интенсивности в зависимости от расстояния 
       // (уменьшается с увеличением расстояния по экспоненте)
-      const intensityFactor = Math.exp(-distanceFactor * 2.5); // Увеличиваем скорость затухания
+      const intensityFactor = Math.exp(-distanceFactor * 1.5); // Уменьшаем скорость затухания
       const newIntensity = Math.max(1, Math.floor(intensity * intensityFactor));
       
       // Добавляем точку в массив
@@ -119,7 +117,8 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
         severity: newIntensity,
         allergen: allergenType,
         parentAllergen: allergenType,
-        isCalculated: true
+        isCalculated: true,
+        timestamp: report.timestamp || new Date().toISOString() // Добавляем временную метку
       });
     }
   });
