@@ -188,7 +188,7 @@
   display: block !important;
   visibility: visible !important;
   position: relative !important;
-  z-index: 1700 !important;
+  z-index: 1000 !important;
 }
 
 .wind-title {
@@ -218,7 +218,7 @@
   border: 3px solid #1976d2 !important;
   display: block !important;
   visibility: visible !important;
-  z-index: 1700 !important;
+  z-index: 1000 !important;
   position: absolute !important;
 }
 
@@ -230,7 +230,7 @@
   border: 3px solid #1976d2 !important;
   display: block !important;
   visibility: visible !important;
-  z-index: 1600 !important;
+  z-index: 1000 !important;
 }
 
 /* Стили для кнопки определения местоположения */
@@ -241,6 +241,7 @@
   border-radius: 6px !important;
   width: 44px !important;
   height: 44px !important;
+  z-index: 1000 !important;
 }
 
 .location-button:hover {

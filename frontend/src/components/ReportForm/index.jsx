@@ -21,7 +21,8 @@ import {
   Autocomplete,
   Checkbox,
   Chip,
-  ClickAwayListener
+  ClickAwayListener,
+  Paper
 } from '@mui/material';
 import { useMapStore } from '../../stores/mapStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -243,7 +244,7 @@ function ReportForm({ location, onClose }) {
         // Закрываем форму с задержкой
         setTimeout(() => {
           toggleReportForm(false);
-        }, 1500);
+        }, 800);
       }
     } catch (error) {
       console.error('Ошибка при отправке отчета:', error);
@@ -328,7 +329,7 @@ function ReportForm({ location, onClose }) {
         maxWidth="sm" 
         fullWidth
         sx={{
-          zIndex: 2000,
+          zIndex: 1300,
           '& .MuiDialog-paper': {
             borderRadius: 2,
             border: '3px solid #1976d2',
@@ -337,19 +338,10 @@ function ReportForm({ location, onClose }) {
             opacity: 1
           }
         }}
-        disablePortal={false}
-        container={document.body}
+        disablePortal={true}
       >
         <DialogTitle>
           Добавить отчет
-          <Button 
-            size="small" 
-            onClick={forceOpenSelect} 
-            variant="outlined" 
-            sx={{ ml: 2 }}
-          >
-            Тест списка
-          </Button>
         </DialogTitle>
         <DialogContent>
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
@@ -370,42 +362,50 @@ function ReportForm({ location, onClose }) {
                   Симптомы *
                 </Typography>
                 
-                {/* Нативный HTML select для симптомов */}
-                <div style={{ border: '1px solid #ccc', padding: '10px', borderRadius: '4px' }}>
-                  {symptoms.map((symptom) => (
-                    <div key={symptom} style={{ margin: '8px 0' }}>
-                      <label style={{ display: 'flex', alignItems: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={formData.symptoms.includes(symptom)}
-                          onChange={(e) => {
-                            const isChecked = e.target.checked;
-                            const updatedSymptoms = isChecked
-                              ? [...formData.symptoms, symptom]
-                              : formData.symptoms.filter(s => s !== symptom);
-                            
-                            console.log('Обновленные симптомы:', updatedSymptoms);
-                            setFormData({
-                              ...formData,
-                              symptoms: updatedSymptoms
-                            });
-                          }}
-                          style={{ marginRight: '8px' }}
-                        />
-                        {symptom}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Отображение выбранных симптомов */}
-                {formData.symptoms.length > 0 && (
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="caption">
-                      Выбрано: {formData.symptoms.join(', ')}
-                    </Typography>
-                  </Box>
-                )}
+                <Autocomplete
+                  multiple
+                  options={symptoms}
+                  value={formData.symptoms}
+                  onChange={(event, newValue) => {
+                    setFormData({
+                      ...formData,
+                      symptoms: newValue
+                    });
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Выберите симптомы"
+                      error={formData.symptoms.length === 0 && formData.type === 'symptom'}
+                      helperText={formData.symptoms.length === 0 && formData.type === 'symptom' ? "Выберите хотя бы один симптом" : ""}
+                    />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        label={option}
+                        {...getTagProps({ index })}
+                        color="primary"
+                        variant="outlined"
+                        sx={{ m: 0.5 }}
+                      />
+                    ))
+                  }
+                  renderOption={(props, option) => (
+                    <li {...props}>
+                      <Checkbox
+                        checked={formData.symptoms.indexOf(option) > -1}
+                        sx={{ mr: 1 }}
+                      />
+                      {option}
+                    </li>
+                  )}
+                  PopperProps={{
+                    sx: {
+                      zIndex: 1400
+                    }
+                  }}
+                />
               </FormControl>
             ) : (
               <FormControl fullWidth sx={{ mb: 2 }}>
@@ -413,8 +413,7 @@ function ReportForm({ location, onClose }) {
                   Тип растения *
                 </Typography>
                 
-                {/* Нативный HTML select для растений */}
-                <select
+                <Select
                   value={formData.plantType}
                   onChange={(e) => {
                     const selectedValue = e.target.value;
@@ -428,22 +427,31 @@ function ReportForm({ location, onClose }) {
                       plantObj: selectedPlant || null
                     });
                   }}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    borderRadius: '4px',
-                    border: '1px solid #ccc',
-                    fontSize: '16px'
-                  }}
                   required
+                  displayEmpty
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 300,
+                        zIndex: 1400
+                      }
+                    }
+                  }}
+                  sx={{
+                    '& .MuiSelect-select': {
+                      py: 1.5
+                    }
+                  }}
                 >
-                  <option value="">-- Выберите растение --</option>
+                  <MenuItem value="" disabled>
+                    -- Выберите растение --
+                  </MenuItem>
                   {plants.map((plant) => (
-                    <option key={plant.id} value={plant.name}>
+                    <MenuItem key={plant.id} value={plant.name}>
                       {plant.name}
-                    </option>
+                    </MenuItem>
                   ))}
-                </select>
+                </Select>
                 
                 {plants.length === 0 && (
                   <Typography variant="caption" color="error" sx={{ mt: 1 }}>

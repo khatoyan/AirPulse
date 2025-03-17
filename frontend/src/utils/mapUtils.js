@@ -23,4 +23,25 @@ export const getColorForSeverity = (severity) => {
     case 5: return '#ff3333'; // красный
     default: return '#3388ff'; // по умолчанию синий
   }
+};
+
+// Функция для расчета актуальности точки на основе времени
+export const calculatePointRelevance = (timestamp, maxAgeHours = 24) => {
+  if (!timestamp) return 0;
+  
+  const pointDate = new Date(timestamp);
+  const now = new Date();
+  const ageHours = (now - pointDate) / (1000 * 60 * 60);
+  
+  // Если точка старше максимального возраста, она неактуальна
+  if (ageHours > maxAgeHours) return 0;
+  
+  // Экспоненциальное затухание: чем старше точка, тем меньше её актуальность
+  return Math.exp(-ageHours / maxAgeHours);
+};
+
+// Функция для нормализации интенсивности с учетом времени
+export const normalizeIntensityWithTime = (intensity, timestamp, maxAgeHours = 24) => {
+  const relevance = calculatePointRelevance(timestamp, maxAgeHours);
+  return normalizeIntensity(intensity) * relevance;
 }; 
