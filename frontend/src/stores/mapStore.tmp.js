@@ -49,12 +49,5 @@ export const useMapStore = create((set, get) => ({
     
     // Иначе используем координаты Новосибирска по умолчанию
     return { lat: 55.0084, lng: 82.9357 };
-  },
-  
-  // Получить API-сервис для работы с внешними данными
-  getApiService: () => {
-    return {
-      weather: weatherService
-    };
   }
 })); 

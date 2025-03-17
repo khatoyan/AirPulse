@@ -14,6 +14,10 @@ import AirIcon from '@mui/icons-material/Air';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
 import WaterIcon from '@mui/icons-material/Water';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import MyLocationIcon from '@mui/icons-material/MyLocation';
+// Импортируем компоненты временной шкалы
+import TimeSlider from './TimeSlider';
+import { normalizeIntensity, getPointRadius } from '../../utils/mapUtils';
 
 // Импорт иконок для меток
 import plantIcon from '../../assets/icons/plant-marker.svg';
@@ -61,9 +65,15 @@ const AllergenSelector = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
+  // Предотвращаем пробрасывание клика на карту
+  const handleContainerClick = (e) => {
+    e.stopPropagation();
+  };
+  
   return (
     <Paper 
       elevation={3}
+      onClick={handleContainerClick}
       sx={{
         position: 'absolute',
         top: 'auto',
@@ -94,7 +104,10 @@ const AllergenSelector = () => {
             key={allergen.id}
             variant={selectedAllergen === allergen.id ? "contained" : "outlined"}
             color="primary"
-            onClick={() => setSelectedAllergen(selectedAllergen === allergen.id ? null : allergen.id)}
+            onClick={(e) => {
+              e.stopPropagation(); // Предотвращаем пробрасывание клика
+              setSelectedAllergen(selectedAllergen === allergen.id ? null : allergen.id);
+            }}
             sx={{
               borderRadius: '6px',
               py: 0.5,
@@ -122,152 +135,107 @@ const AllergenSelector = () => {
   );
 };
 
-// Компонент для обновления тепловой карты
+// Модифицируем компонент HeatmapLayer для поддержки временной шкалы
 const HeatmapLayer = () => {
-  const { reports, windDispersionPoints, selectedAllergen } = useMapStore();
   const map = useMap();
-  const layerRef = useRef();
-  const windLayerRef = useRef();
-  const [loading, setLoading] = useState(true);
-
-  // Настраиваем функцию для адаптивного радиуса: больше радиус для более интенсивных точек
-  const getPointRadius = (intensity) => {
-    // Теперь intensity в диапазоне 1-5, масштабируем адекватно
-    return 15 + Math.min(intensity * 3, 15); // От 15 до 30 в зависимости от интенсивности
-  };
-
-  // Настраиваем цветовую схему для обычной тепловой карты (зелено-желто-красная)
-  const normalGradient = {
-    0.0: 'rgba(0, 255, 0, 0)',
-    0.2: 'rgba(150, 255, 0, 0.15)',
-    0.4: 'rgba(255, 255, 0, 0.2)',
-    0.6: 'rgba(255, 200, 0, 0.3)',
-    0.8: 'rgba(255, 100, 0, 0.4)',
-    0.9: 'rgba(255, 50, 0, 0.5)',
-    1.0: 'rgba(255, 0, 0, 0.6)'
-  };
-
-  // Настраиваем другую цветовую схему для точек рассеивания (зелено-желто-красная)
-  const windGradient = {
-    0.0: 'rgba(0, 255, 0, 0)',
-    0.2: 'rgba(150, 255, 0, 0.15)',
-    0.4: 'rgba(255, 255, 0, 0.2)',
-    0.6: 'rgba(255, 200, 0, 0.3)',
-    0.8: 'rgba(255, 100, 0, 0.4)',
-    0.9: 'rgba(255, 50, 0, 0.5)',
-    1.0: 'rgba(255, 0, 0, 0.6)'
-  };
-
+  const heatmapLayerRef = useRef(null);
+  const { reports, updateHeatmap, selectedAllergen, timelineActive, timeDispersionPoints, dispersedPoints } = useMapStore();
+  
+  // При изменении отчетов или флага обновления обновляем тепловую карту
   useEffect(() => {
-    if (reports.length > 0) {
-      setLoading(false);
-      
-      if (map && reports) {
-        // Фильтруем точки, исключаем рассчитанные и применяем фильтр по аллергену
-        const filteredReports = reports.filter(r => {
-          // Исключаем рассчитанные точки
-          if (r.isCalculated) return false;
-          
-          // Если аллерген выбран и это растение, проверяем соответствие
-          if (selectedAllergen && r.type === 'plant' && r.plantType) {
-            return r.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
-          }
-          
-          // Если аллерген выбран, но это не растение, исключаем
-          if (selectedAllergen && r.type !== 'plant') return false;
-          
-          // Если аллерген не выбран, включаем все точки
-          return true;
-        });
-        
-        console.log(`Отображение ${filteredReports.length} точек на тепловой карте (из ${reports.length} отчетов)`);
-        
-        const points = filteredReports.map(r => [
-          r.latitude,
-          r.longitude,
-          Math.max(r.severity / 5, 0.3) // Увеличиваем минимальную интенсивность с 0.2 до 0.3
-        ]);
-
-        if (layerRef.current) {
-          map.removeLayer(layerRef.current);
+    // Фильтруем отчеты по выбранному аллергену, если он установлен
+    let displayReports = reports;
+    
+    if (selectedAllergen) {
+      displayReports = reports.filter(report => {
+        if (report.plantType && report.type === 'plant') {
+          return report.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
         }
-
-        if (points.length > 0) {
-          layerRef.current = L.heatLayer(points, {
-            radius: 40, // Немного уменьшаем с 50 до 40
-            blur: 50, // Уменьшаем с 70 до 50 для более четкого отображения
-            maxZoom: 18,
-            minOpacity: 0.4, // Увеличиваем с 0.3 до 0.4
-            gradient: normalGradient,
-          }).addTo(map);
-        }
-      }
-    } else if (loading && reports.length === 0) {
-      // Если данные загружены, но пусты
-      setTimeout(() => setLoading(false), 1000);
+        return false;
+      });
     }
 
-    return () => {
-      if (layerRef.current && map) {
-        map.removeLayer(layerRef.current);
-      }
-    };
-  }, [map, reports, loading, selectedAllergen]); // Добавляем зависимость от selectedAllergen
-
-  useEffect(() => {
-    if (map && windDispersionPoints && windDispersionPoints.length > 0) {
-      // Создаем тепловую карту для точек рассеивания ветром
-      const windHeatData = windDispersionPoints.map(p => {
-        // Получаем интенсивность точки, приведенную к шкале 0-1
-        const intensity = Math.min(p.severity / 5, 1);
-        
-        // Интенсивность увеличиваем для лучшей видимости
-        const boostedIntensity = Math.min(intensity * 1.5, 1);
-        
+    // Фильтруем только отчеты о симптомах и растениях (без расчетных точек распространения)
+    const heatmapData = displayReports
+      .filter(report => !report.isCalculated)
+      .map(report => {
         return [
-          p.latitude,
-          p.longitude,
-          boostedIntensity // Увеличенное значение интенсивности для тепловой карты
+          report.latitude,
+          report.longitude,
+          normalizeIntensity(report.severity)
         ];
       });
 
-      if (windLayerRef.current) {
-        map.removeLayer(windLayerRef.current);
-      }
+    console.log(`Отображение ${heatmapData.length} точек на тепловой карте (из ${reports.length} отчетов)`);
 
-      console.log(`Отображение ${windHeatData.length} точек рассеивания ветром`);
-
-      // Настраиваем отображение для точек рассеивания
-      windLayerRef.current = L.heatLayer(windHeatData, {
-        radius: 30, // Уменьшаем радиус для более четкого отображения
-        blur: 40, // Уменьшаем размытие для более четкого отображения
-        maxZoom: 18,
-        gradient: windGradient,
-        minOpacity: 0.4 // Увеличиваем минимальную непрозрачность для лучшей видимости
-      }).addTo(map);
-    } else {
-      console.log(`Нет точек рассеивания ветром для отображения (${windDispersionPoints?.length || 0} точек)`);
+    // Если уже есть тепловая карта, удаляем ее
+    if (heatmapLayerRef.current) {
+      map.removeLayer(heatmapLayerRef.current);
     }
-
-    return () => {
-      if (windLayerRef.current && map) {
-        map.removeLayer(windLayerRef.current);
+    
+    // Создаем новую тепловую карту
+    heatmapLayerRef.current = L.heatLayer(heatmapData, {
+      radius: 20,
+      blur: 15,
+      maxZoom: 10,
+      gradient: {
+        0.0: 'rgba(0, 128, 255, 0.7)',
+        0.3: 'rgba(0, 255, 255, 0.7)',
+        0.5: 'rgba(255, 255, 0, 0.8)',
+        0.7: 'rgba(255, 128, 0, 0.9)',
+        1.0: 'rgba(255, 0, 0, 1.0)'
       }
-    };
-  }, [map, windDispersionPoints]);
+    }).addTo(map);
 
-  // Если данные загружаются, показываем индикатор загрузки
-  if (loading) {
-    return (
-      <div className="map-loading-overlay">
-        <CircularProgress size={40} />
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          Загрузка данных...
-        </Typography>
-      </div>
-    );
-  }
+  }, [map, reports, updateHeatmap, selectedAllergen]);
 
+  return null;
+};
+
+// Компонент для отображения точек распространения пыльцы
+const WindDispersionLayer = () => {
+  const map = useMap();
+  const windDispersionLayerRef = useRef(null);
+  const { dispersedPoints, timelineActive, timeDispersionPoints, updateHeatmap } = useMapStore();
+  
+  useEffect(() => {
+    // Определяем, какие точки использовать в зависимости от режима
+    const pointsToDisplay = timelineActive ? timeDispersionPoints : dispersedPoints;
+    
+    // Если уже есть слой с точками, удаляем его
+    if (windDispersionLayerRef.current) {
+      map.removeLayer(windDispersionLayerRef.current);
+    }
+    
+    if (pointsToDisplay && pointsToDisplay.length > 0) {
+      // Преобразуем точки в формат для L.heatLayer
+      const heatmapData = pointsToDisplay.map(point => {
+        return [
+          point.latitude,
+          point.longitude,
+          normalizeIntensity(point.severity)
+        ];
+      });
+      
+      console.log(`Отображение ${heatmapData.length} точек рассеивания ветром (timelineActive: ${timelineActive})`);
+      
+      // Создаем новый слой с точками распространения
+      windDispersionLayerRef.current = L.heatLayer(heatmapData, {
+        radius: 15,
+        blur: 20,
+        maxZoom: 18,
+        gradient: {
+          0.0: 'rgba(0, 128, 255, 0.7)',
+          0.3: 'rgba(0, 255, 255, 0.7)',
+          0.5: 'rgba(255, 255, 0, 0.8)',
+          0.7: 'rgba(255, 128, 0, 0.9)',
+          1.0: 'rgba(255, 0, 0, 1.0)'
+        }
+      }).addTo(map);
+    }
+    
+  }, [map, dispersedPoints, timeDispersionPoints, timelineActive, updateHeatmap]);
+  
   return null;
 };
 
@@ -331,33 +299,34 @@ const PointMarkers = () => {
   );
 };
 
-// Функция для получения цвета в зависимости от интенсивности
-const getColorForSeverity = (severity) => {
-  switch (severity) {
-    case 1: return '#3388ff'; // синий
-    case 2: return '#33ff88'; // зеленый
-    case 3: return '#ffff33'; // желтый
-    case 4: return '#ff8833'; // оранжевый
-    case 5: return '#ff3333'; // красный
-    default: return '#3388ff'; // по умолчанию синий
-  }
-};
-
 // Компонент для обработки событий карты
 const MapController = () => {
-  const { setSelectedLocation, setShowReportForm } = useMapStore();
+  const { toggleReportForm } = useMapStore();
   
   // Обрабатываем клик по карте
-  useMapEvents({
+  const mapEvents = useMapEvents({
     click: (e) => {
+      console.log('Клик по карте зарегистрирован: ', e.latlng);
+      
+      // Проверяем, был ли клик на элементе управления
+      const target = e.originalEvent.target;
+      if (target.closest('.leaflet-control') || 
+          target.closest('.MuiPaper-root') || 
+          target.closest('.MuiButton-root') || 
+          target.closest('.MuiIconButton-root')) {
+        console.log('Клик на элементе управления, игнорируем');
+        return;
+      }
+      
       // Сохраняем координаты в объекте для создания нового отчета
       const coords = {
         latitude: e.latlng.lat,
         longitude: e.latlng.lng
       };
       console.log('Клик по карте для создания отчета:', coords);
-      setSelectedLocation(coords);
-      setShowReportForm(true); // Показываем форму отчета
+      
+      // Показываем форму отчета с выбранной локацией
+      toggleReportForm(true, coords);
     }
   });
 
@@ -436,7 +405,7 @@ const WindIndicator = () => {
     if (!windControlRef.current) {
       const WindControl = L.Control.extend({
         options: {
-          position: 'topleft' // Изменяем позицию на topleft
+          position: 'bottomleft' // Меняем позицию на bottomleft
         },
         
         onAdd: function() {
@@ -444,22 +413,28 @@ const WindIndicator = () => {
           container.style.background = 'white';
           container.style.padding = '10px';
           container.style.borderRadius = '5px';
-          container.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+          container.style.boxShadow = '0 3px 8px rgba(0,0,0,0.4)';
           container.style.width = '150px';
           container.style.margin = '10px';
+          container.style.border = '2px solid #1976d2';
+          container.style.zIndex = '1700'; // Увеличиваем z-index
+          container.style.opacity = '1'; // Полная непрозрачность
           
           const title = L.DomUtil.create('div', 'wind-title', container);
           title.innerHTML = 'Ветер';
           title.style.fontWeight = 'bold';
           title.style.marginBottom = '5px';
           title.style.color = '#1976d2';
+          title.style.fontSize = '14px';
           
           const content = L.DomUtil.create('div', 'wind-content', container);
           content.innerHTML = 'Нет данных';
+          content.style.fontWeight = '500';
+          content.style.fontSize = '13px';
           
           const arrow = L.DomUtil.create('div', 'wind-arrow', container);
           arrow.innerHTML = '↑';
-          arrow.style.fontSize = '24px';
+          arrow.style.fontSize = '30px';
           arrow.style.textAlign = 'center';
           arrow.style.transform = 'rotate(0deg)';
           arrow.style.marginTop = '5px';
@@ -527,6 +502,11 @@ const WeatherInfoPanel = () => {
   const [expanded, setExpanded] = useState(false);
   
   if (!weatherData) return null;
+  
+  // Предотвращаем пробрасывание клика на карту
+  const handlePanelClick = (e) => {
+    e.stopPropagation();
+  };
   
   // Определяем влияние погодных факторов на рассеивание пыльцы
   const getTemperatureImpact = (temp) => {
@@ -618,29 +598,53 @@ const WeatherInfoPanel = () => {
   
   return (
     <Paper
-      elevation={3}
+      elevation={4}
+      className="weather-info-panel"
+      onClick={handlePanelClick}
       sx={{
         position: 'absolute',
-        top: '10px',
+        top: '90px', // Увеличиваем отступ сверху
         right: '10px',
-        zIndex: 1000,
+        zIndex: 1700,
         padding: 2,
         width: expanded ? 320 : 'auto',
+        minWidth: 180,
         transition: 'width 0.3s ease',
         maxWidth: '90%',
         borderRadius: 2,
         backgroundColor: 'background.paper',
-        opacity: 0.9
+        opacity: 1,
+        border: '3px solid #1976d2',
+        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.5)'
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="subtitle1" fontWeight="bold">
-          Погодные условия и рассеивание пыльцы
+        <Typography variant="subtitle1" fontWeight="bold" color="primary">
+          Погодные условия
         </Typography>
-        <IconButton size="small" onClick={() => setExpanded(!expanded)}>
-          <InfoIcon fontSize="small" color={expanded ? 'primary' : 'action'} />
+        <IconButton 
+          size="small" 
+          onClick={() => setExpanded(!expanded)}
+          sx={{
+            color: expanded ? 'primary.main' : 'text.secondary',
+            bgcolor: expanded ? 'rgba(25, 118, 210, 0.1)' : 'transparent',
+            border: expanded ? '1px solid rgba(25, 118, 210, 0.5)' : 'none'
+          }}
+        >
+          <InfoIcon fontSize="small" />
         </IconButton>
       </Box>
+      
+      {/* Если панель не развернута, показываем краткую информацию */}
+      {!expanded && (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="body2" component="div" sx={{ fontWeight: 'medium' }}>
+            {weatherData.temperature ? `${weatherData.temperature}°C` : 'Н/Д'}, 
+            {weatherData.humidity ? ` ${weatherData.humidity}%` : ' Н/Д'}, 
+            {weatherData.windSpeed ? ` ${weatherData.windSpeed} м/с` : ' Н/Д'}
+          </Typography>
+        </Box>
+      )}
       
       {expanded && (
         <Box sx={{ mt: 1 }}>
@@ -649,7 +653,7 @@ const WeatherInfoPanel = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <ThermostatIcon fontSize="small" sx={{ mr: 1, color: tempImpact.color }} />
             <Box>
-              <Typography variant="body2" component="span">
+              <Typography variant="body2" component="span" fontWeight="medium">
                 Температура: {weatherData.temperature ? `${weatherData.temperature}°C` : 'Н/Д'}
               </Typography>
               <Typography variant="body2" component="div" color={tempImpact.color}>
@@ -661,7 +665,7 @@ const WeatherInfoPanel = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
             <WaterIcon fontSize="small" sx={{ mr: 1, color: humidityImpact.color }} />
             <Box>
-              <Typography variant="body2" component="span">
+              <Typography variant="body2" component="span" fontWeight="medium">
                 Влажность: {weatherData.humidity ? `${weatherData.humidity}%` : 'Н/Д'}
               </Typography>
               <Typography variant="body2" component="div" color={humidityImpact.color}>
@@ -673,7 +677,7 @@ const WeatherInfoPanel = () => {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <AirIcon fontSize="small" sx={{ mr: 1, color: windImpact.color }} />
             <Box>
-              <Typography variant="body2" component="span">
+              <Typography variant="body2" component="span" fontWeight="medium">
                 Ветер: {weatherData.windSpeed ? `${weatherData.windSpeed} м/с` : 'Н/Д'}, 
                 {weatherData.windDeg ? ` ${weatherData.windDeg}°` : ' Н/Д'}
               </Typography>
@@ -688,7 +692,7 @@ const WeatherInfoPanel = () => {
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <HelpOutlineIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
             <Typography variant="caption" color="text.secondary">
-              Используем модель Гауссовского рассеивания с учетом погодных факторов для моделирования распространения пыльцы
+              Используем модель Гауссовского рассеивания с учетом погодных факторов
             </Typography>
           </Box>
         </Box>
@@ -697,9 +701,205 @@ const WeatherInfoPanel = () => {
   );
 };
 
+// Компонент для загрузки прогноза погоды
+const ForecastDataLoader = () => {
+  const { loadForecast, forecastData } = useMapStore();
+  const map = useMap();
+  
+  useEffect(() => {
+    // Загружаем прогноз при монтировании компонента
+    if (!forecastData || forecastData.length === 0) {
+      const center = map.getCenter();
+      console.log('Загрузка прогноза погоды при инициализации карты:', center);
+      loadForecast(center.lat, center.lng);
+    }
+    
+    // Загружаем новый прогноз при значительном изменении области просмотра
+    const handleMoveEnd = () => {
+      // Ограничиваем частоту обновления - запрашиваем новый прогноз только 
+      // если карта была значительно перемещена (более 20 км)
+      const center = map.getCenter();
+      console.log('Карта перемещена, обновляем прогноз погоды:', center);
+      loadForecast(center.lat, center.lng);
+    };
+    
+    // Добавляем обработчик события перемещения карты
+    const debouncedHandler = debounce(handleMoveEnd, 2000);
+    map.on('moveend', debouncedHandler);
+    
+    return () => {
+      map.off('moveend', debouncedHandler);
+    };
+  }, [map, loadForecast, forecastData]);
+  
+  return null;
+};
+
+// Компонент для обработки местоположения пользователя
+const UserLocationControl = () => {
+  const map = useMap();
+  const { setUserLocation, userLocation } = useMapStore();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const locationControlRef = useRef(null);
+  
+  // Функция для определения местоположения пользователя
+  const getUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError("Ваш браузер не поддерживает геолокацию");
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log(`Получены координаты пользователя: ${latitude}, ${longitude}`);
+        
+        // Сохраняем местоположение пользователя в хранилище в правильном формате
+        setUserLocation({ lat: latitude, lng: longitude });
+        
+        // Перемещаем карту к местоположению пользователя
+        map.setView([latitude, longitude], 13);
+        
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Ошибка при получении местоположения:", err);
+        setError(`Не удалось определить местоположение: ${err.message}`);
+        setLoading(false);
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 5000, 
+        maximumAge: 0 
+      }
+    );
+  }, [map, setUserLocation]);
+  
+  // Добавляем кнопку на карту
+  useEffect(() => {
+    if (!map) return;
+    
+    // Создаем кастомный контрол для кнопки местоположения
+    if (!locationControlRef.current) {
+      const LocationControl = L.Control.extend({
+        options: {
+          position: 'topleft'
+        },
+        
+        onAdd: function(map) {
+          const container = L.DomUtil.create('div', 'location-control');
+          container.innerHTML = `
+            <button class="location-button" title="Найти мое местоположение">
+              <svg viewBox="0 0 24 24" width="24" height="24">
+                <path fill="#1976d2" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+              </svg>
+            </button>
+          `;
+          
+          // Добавляем стили для кнопки
+          const style = document.createElement('style');
+          style.innerHTML = `
+            .location-control {
+              margin: 10px;
+            }
+            .location-button {
+              width: 40px;
+              height: 40px;
+              border-radius: 4px;
+              background-color: white;
+              border: 2px solid rgba(0, 0, 0, 0.2);
+              background-clip: padding-box;
+              cursor: pointer;
+              padding: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            }
+            .location-button:hover {
+              background-color: #f4f4f4;
+            }
+            .location-button.loading svg {
+              animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `;
+          document.head.appendChild(style);
+          
+          // Добавляем обработчик клика
+          container.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            
+            // Вызываем функцию определения местоположения
+            getUserLocation();
+            
+            // Добавляем класс загрузки к кнопке
+            const button = container.querySelector('.location-button');
+            button.classList.add('loading');
+            
+            // Удаляем класс загрузки через 2 секунды
+            setTimeout(() => {
+              button.classList.remove('loading');
+            }, 2000);
+            
+            return false;
+          };
+          
+          return container;
+        }
+      });
+      
+      locationControlRef.current = new LocationControl();
+      map.addControl(locationControlRef.current);
+    }
+    
+    // Автоопределение местоположения при первой загрузке
+    getUserLocation();
+    
+    return () => {
+      if (locationControlRef.current) {
+        map.removeControl(locationControlRef.current);
+        locationControlRef.current = null;
+      }
+    };
+  }, [map, getUserLocation]);
+  
+  return null;
+};
+
+// Добавляем функцию debounce, если нет lodash
+const debounce = (func, wait) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
+// Модифицируем основной компонент карты
 function Map() {
-  const { showReportForm, setShowReportForm, selectedLocation } = useMapStore();
+  const { showReportForm, selectedLocation, setReports, setUserLocation, toggleReportForm } = useMapStore();
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Добавляем инициализацию состояния для местоположения пользователя
+  useEffect(() => {
+    // Дополняем хранилище начальными данными о местоположении пользователя
+    useMapStore.setState({ 
+      userLocation: null
+    });
+  }, []);
   
   // Симулируем начальную загрузку карты
   useEffect(() => {
@@ -731,31 +931,38 @@ function Map() {
   }
   
   return (
-    <Box sx={{ position: 'relative', width: '100%', height: '70vh' }}>
-      <MapContainer 
-        center={[55.0084, 82.9357]} 
-        zoom={12} 
+    <Box sx={{ position: 'relative', height: '90vh', width: '100%' }}>
+      <MapContainer
+        center={[55.0084, 82.9357]} // Новосибирск как начальный центр
+        zoom={11}
         style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
       >
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <WeatherDataLoader />
-        <HeatmapLayer />
-        <PointMarkers />
+        
         <MapController />
+        <WeatherDataLoader />
+        <ForecastDataLoader />
+        <UserLocationControl />
+        
+        <HeatmapLayer />
+        <WindDispersionLayer />
+        <PointMarkers />
+        
+        <WeatherInfoPanel />
         <WindIndicator />
+        
+        <AllergenSelector />
+        <TimeSlider />
       </MapContainer>
       
-      <WeatherInfoPanel />
-      <AllergenSelector />
-      
       {showReportForm && selectedLocation && (
-        <ReportForm 
-          open={showReportForm}
-          onClose={() => setShowReportForm(false)}
+        <ReportForm
           location={selectedLocation}
+          onClose={() => toggleReportForm(false)}
         />
       )}
     </Box>
