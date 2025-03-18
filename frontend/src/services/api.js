@@ -252,15 +252,37 @@ export const weatherService = {
       }
       
       // Нормализуем данные прогноза в единый формат
-      const normalizedForecast = data.map(item => ({
-        time: item.time,
-        timeLabel: item.timeLabel || item.hourLabel || '',
-        hourLabel: item.hourLabel || item.timeLabel || '',
-        temperature: item.temp || item.temperature || 0,
-        humidity: item.humidity || 0,
-        windSpeed: item.wind_speed || item.windSpeed || 0,
-        windDirection: item.wind_deg || item.windDirection || 0
-      }));
+      const normalizedForecast = data.map(item => {
+        // Создаем временную метку в формате "DD.MM, HH:MM" и форматируем полную метку
+        const dt = item.dt || (typeof item.time === 'string' ? Date.parse(item.time) / 1000 : item.time);
+        const date = new Date(dt * 1000);
+        
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        
+        const timeLabel = `${hours}:${minutes}`;
+        const hourLabel = `${hours}:00`;
+        const dateLabel = `${day}.${month}`;
+        
+        // Полная метка включает дату, время и температуру
+        const temp = item.temp || item.temperature || 0;
+        const fullLabel = `${dateLabel}, ${timeLabel} | ${temp.toFixed(1)}°C`;
+        
+        return {
+          dt,
+          time: item.time,
+          timeLabel,
+          hourLabel,
+          dateLabel,
+          fullLabel,
+          temp: temp,
+          humidity: item.humidity || 0,
+          wind_speed: item.wind_speed || item.windSpeed || 0,
+          wind_deg: item.wind_deg || item.windDirection || 0
+        };
+      });
       
       console.log(`Получен прогноз на ${normalizedForecast.length} часов`);
       return normalizedForecast;

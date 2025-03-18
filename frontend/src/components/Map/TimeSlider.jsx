@@ -124,13 +124,58 @@ const TimeSlider = () => {
   // Получаем данные о текущем выбранном времени
   const currentTimeData = forecastData[selectedTimeIndex] || {};
   
+  // Добавляем форматирование даты, если не хватает полей
+  const formatCurrentTimeData = () => {
+    if (!currentTimeData || Object.keys(currentTimeData).length === 0) {
+      return 'Загрузка данных...';
+    }
+
+    if (currentTimeData.fullLabel) {
+      return currentTimeData.fullLabel;
+    }
+
+    // Форматируем дату и время, если есть timestamp или dt
+    let dateStr = 'Данные не доступны';
+    if (currentTimeData.dt || currentTimeData.timestamp) {
+      const date = new Date((currentTimeData.dt || currentTimeData.timestamp) * 1000);
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      
+      dateStr = `${day}.${month}, ${hours}:${minutes}`;
+      
+      // Добавляем данные о температуре, если есть
+      if (currentTimeData.temp || currentTimeData.temperature) {
+        const temp = currentTimeData.temp || currentTimeData.temperature;
+        dateStr += `, ${temp}°C`;
+      }
+    }
+    
+    return dateStr;
+  };
+
+  // Форматируем метки времени для слайдера
+  const formatHourLabel = (item) => {
+    if (item.hourLabel) {
+      return item.hourLabel;
+    }
+    
+    if (item.dt || item.timestamp) {
+      const date = new Date((item.dt || item.timestamp) * 1000);
+      return `${date.getHours()}:00`;
+    }
+    
+    return '';
+  };
+
   // Форматируем метки времени для слайдера
   const timeMarks = forecastData.filter((_, index) => {
     // На мобильных показываем меньше меток
     return isMobile ? index % 8 === 0 : index % 4 === 0;
   }).map(item => ({
     value: forecastData.indexOf(item),
-    label: item.hourLabel
+    label: formatHourLabel(item)
   }));
   
   // Если нет данных прогноза и не активен режим таймлайна, возвращаем только кнопку активации
@@ -315,7 +360,7 @@ const TimeSlider = () => {
             </IconButton>
             
             <Typography variant={isMobile ? "body2" : "body1"} sx={{ flexGrow: 1, textAlign: 'center', fontWeight: 'bold' }}>
-              {currentTimeData.fullLabel || 'Загрузка данных...'}
+              {formatCurrentTimeData()}
             </Typography>
             
             <IconButton
@@ -354,10 +399,10 @@ const TimeSlider = () => {
         
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant={isMobile ? "caption" : "body2"} color="text.secondary">
-            {forecastData[0]?.fullLabel || ''}
+            {forecastData[0] ? formatHourLabel(forecastData[0]) : ''}
           </Typography>
           <Typography variant={isMobile ? "caption" : "body2"} color="text.secondary">
-            {forecastData[forecastData.length - 1]?.fullLabel || ''}
+            {forecastData[forecastData.length - 1] ? formatHourLabel(forecastData[forecastData.length - 1]) : ''}
           </Typography>
         </Box>
         
