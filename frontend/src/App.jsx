@@ -44,7 +44,7 @@ function App() {
 
   return (
     <Router>
-      <div className="app">
+      <div className="app" role="main">
         <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} />
         <Routes>
           <Route path="/" element={<MainApp />} />

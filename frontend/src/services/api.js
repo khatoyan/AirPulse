@@ -205,10 +205,36 @@ export const plantsService = {
 export const weatherService = {
   // Получить текущую погоду
   getCurrentWeather: async (lat, lon) => {
-    const { data } = await api.get('/weather/current', {
-      params: { lat, lon }
-    });
-    return data;
+    try {
+      const { data } = await api.get('/weather/current', {
+        params: { lat, lon }
+      });
+      
+      // Нормализуем данные о погоде для фронтенда
+      const normalizedData = {
+        temperature: data.main?.temp,
+        humidity: data.main?.humidity,
+        windSpeed: data.wind?.speed,
+        windDirection: data.wind?.deg,
+        description: data.weather?.[0]?.description,
+        icon: data.weather?.[0]?.icon,
+        // Сохраняем исходные данные на всякий случай
+        ...data
+      };
+      
+      return normalizedData;
+    } catch (error) {
+      console.error('Ошибка при получении погодных данных:', error);
+      // Возвращаем базовую структуру в случае ошибки
+      return {
+        temperature: null,
+        humidity: null,
+        windSpeed: null,
+        windDirection: null,
+        description: 'Нет данных',
+        error: true
+      };
+    }
   },
   
   // Получить прогноз погоды на 24 часа
@@ -225,8 +251,19 @@ export const weatherService = {
         return [];
       }
       
-      console.log(`Получен прогноз на ${data.length} часов`);
-      return data;
+      // Нормализуем данные прогноза в единый формат
+      const normalizedForecast = data.map(item => ({
+        time: item.time,
+        timeLabel: item.timeLabel || item.hourLabel || '',
+        hourLabel: item.hourLabel || item.timeLabel || '',
+        temperature: item.temp || item.temperature || 0,
+        humidity: item.humidity || 0,
+        windSpeed: item.wind_speed || item.windSpeed || 0,
+        windDirection: item.wind_deg || item.windDirection || 0
+      }));
+      
+      console.log(`Получен прогноз на ${normalizedForecast.length} часов`);
+      return normalizedForecast;
     } catch (error) {
       console.error('Ошибка при получении прогноза погоды:', error);
       // Возвращаем пустой массив в случае ошибки

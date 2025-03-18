@@ -381,15 +381,20 @@ function ReportForm({ location, onClose }) {
                     />
                   )}
                   renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        label={option}
-                        {...getTagProps({ index })}
-                        color="primary"
-                        variant="outlined"
-                        sx={{ m: 0.5 }}
-                      />
-                    ))
+                    value.map((option, index) => {
+                      const tagProps = getTagProps({ index });
+                      const { key, ...otherProps } = tagProps;
+                      return (
+                        <Chip
+                          key={key}
+                          label={option}
+                          {...otherProps}
+                          color="primary"
+                          variant="outlined"
+                          sx={{ m: 0.5 }}
+                        />
+                      );
+                    })
                   }
                   renderOption={(props, option) => (
                     <li {...props}>
@@ -400,9 +405,11 @@ function ReportForm({ location, onClose }) {
                       {option}
                     </li>
                   )}
-                  PopperProps={{
-                    sx: {
-                      zIndex: 1400
+                  componentsProps={{
+                    popper: {
+                      sx: {
+                        zIndex: 1400
+                      }
                     }
                   }}
                 />

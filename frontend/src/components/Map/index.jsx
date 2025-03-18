@@ -4,17 +4,17 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import { useMapStore } from '../../stores/mapStore';
-import { Box, Paper, Typography, Divider, Tooltip, CircularProgress, ButtonGroup, Button, Stack } from '@mui/material';
+import { Box, Paper, Typography, Divider, Tooltip, CircularProgress, ButtonGroup, Button, Stack, IconButton } from '@mui/material';
 import ReportForm from '../ReportForm';
 import './Map.css';
 import { weatherService } from '../../services/api';
-import IconButton from '@mui/material/IconButton';
 import InfoIcon from '@mui/icons-material/Info';
 import AirIcon from '@mui/icons-material/Air';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
 import WaterIcon from '@mui/icons-material/Water';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
+import CloseIcon from '@mui/icons-material/Close';
 // Импортируем компоненты временной шкалы
 import TimeSlider from './TimeSlider';
 import { normalizeIntensity, getPointRadius, getColorForSeverity, normalizeIntensityWithTime } from '../../utils/mapUtils';
@@ -143,49 +143,57 @@ const HeatmapLayer = () => {
   
   // При изменении отчетов или флага обновления обновляем тепловую карту
   useEffect(() => {
-    // Фильтруем отчеты по выбранному аллергену, если он установлен
-    let displayReports = reports;
+    if (!map) return;
     
-    if (selectedAllergen) {
-      displayReports = reports.filter(report => {
-        if (report.plantType && report.type === 'plant') {
-          return report.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
-        }
-        return false;
-      });
-    }
-
-    // Фильтруем только отчеты о симптомах и растениях (без расчетных точек распространения)
-    const heatmapData = displayReports
-      .filter(report => !report.isCalculated)
-      .map(report => {
-        return [
-          report.latitude,
-          report.longitude,
-          normalizeIntensityWithTime(report.severity, report.timestamp)
-        ];
-      });
-
-    console.log(`Отображение ${heatmapData.length} точек на тепловой карте (из ${reports.length} отчетов)`);
-
-    // Если уже есть тепловая карта, удаляем ее
-    if (heatmapLayerRef.current) {
-      map.removeLayer(heatmapLayerRef.current);
-    }
-    
-    // Создаем новую тепловую карту
-    heatmapLayerRef.current = L.heatLayer(heatmapData, {
-      radius: 20,
-      blur: 15,
-      maxZoom: 10,
-      gradient: {
-        0.0: 'rgba(0, 128, 255, 0.7)',
-        0.3: 'rgba(0, 255, 255, 0.7)',
-        0.5: 'rgba(255, 255, 0, 0.8)',
-        0.7: 'rgba(255, 128, 0, 0.9)',
-        1.0: 'rgba(255, 0, 0, 1.0)'
+    try {
+      // Фильтруем отчеты по выбранному аллергену, если он установлен
+      let displayReports = reports || [];
+      
+      if (selectedAllergen) {
+        displayReports = displayReports.filter(report => {
+          if (report.plantType && report.type === 'plant') {
+            return report.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
+          }
+          return false;
+        });
       }
-    }).addTo(map);
+
+      // Фильтруем только отчеты о симптомах и растениях (без расчетных точек распространения)
+      const heatmapData = displayReports
+        .filter(report => report && !report.isCalculated)
+        .map(report => {
+          return [
+            report.latitude,
+            report.longitude,
+            normalizeIntensityWithTime(report.severity, report.timestamp)
+          ];
+        });
+
+      console.log(`Отображение ${heatmapData.length} точек на тепловой карте (из ${reports ? reports.length : 0} отчетов)`);
+
+      // Если уже есть тепловая карта, удаляем ее
+      if (heatmapLayerRef.current) {
+        map.removeLayer(heatmapLayerRef.current);
+      }
+      
+      // Создаем новую тепловую карту только если есть данные
+      if (heatmapData.length > 0) {
+        heatmapLayerRef.current = L.heatLayer(heatmapData, {
+          radius: 20,
+          blur: 15,
+          maxZoom: 10,
+          gradient: {
+            0.0: 'rgba(0, 128, 255, 0.7)',
+            0.3: 'rgba(0, 255, 255, 0.7)',
+            0.5: 'rgba(255, 255, 0, 0.8)',
+            0.7: 'rgba(255, 128, 0, 0.9)',
+            1.0: 'rgba(255, 0, 0, 1.0)'
+          }
+        }).addTo(map);
+      }
+    } catch (error) {
+      console.error('Ошибка при создании тепловой карты:', error);
+    }
 
   }, [map, reports, updateHeatmap, selectedAllergen]);
 
@@ -199,39 +207,49 @@ const WindDispersionLayer = () => {
   const { dispersedPoints, timelineActive, timeDispersionPoints, updateHeatmap } = useMapStore();
   
   useEffect(() => {
-    // Определяем, какие точки использовать в зависимости от режима
-    const pointsToDisplay = timelineActive ? timeDispersionPoints : dispersedPoints;
+    if (!map) return;
     
-    // Если уже есть слой с точками, удаляем его
-    if (windDispersionLayerRef.current) {
-      map.removeLayer(windDispersionLayerRef.current);
-    }
-    
-    if (pointsToDisplay && pointsToDisplay.length > 0) {
-      // Преобразуем точки в формат для L.heatLayer
-      const heatmapData = pointsToDisplay.map(point => {
-        return [
-          point.latitude,
-          point.longitude,
-          normalizeIntensityWithTime(point.severity, point.timestamp)
-        ];
-      });
+    try {
+      // Определяем, какие точки использовать в зависимости от режима
+      const pointsToDisplay = timelineActive ? (timeDispersionPoints || []) : (dispersedPoints || []);
       
-      console.log(`Отображение ${heatmapData.length} точек рассеивания ветром (timelineActive: ${timelineActive})`);
+      // Если уже есть слой с точками, удаляем его
+      if (windDispersionLayerRef.current) {
+        map.removeLayer(windDispersionLayerRef.current);
+      }
       
-      // Создаем новый слой с точками распространения
-      windDispersionLayerRef.current = L.heatLayer(heatmapData, {
-        radius: 15,
-        blur: 20,
-        maxZoom: 18,
-        gradient: {
-          0.0: 'rgba(0, 128, 255, 0.7)',
-          0.3: 'rgba(0, 255, 255, 0.7)',
-          0.5: 'rgba(255, 255, 0, 0.8)',
-          0.7: 'rgba(255, 128, 0, 0.9)',
-          1.0: 'rgba(255, 0, 0, 1.0)'
+      if (pointsToDisplay && pointsToDisplay.length > 0) {
+        // Преобразуем точки в формат для L.heatLayer
+        const heatmapData = pointsToDisplay
+          .filter(point => point && point.latitude && point.longitude)
+          .map(point => {
+            return [
+              point.latitude,
+              point.longitude,
+              normalizeIntensityWithTime(point.severity, point.timestamp)
+            ];
+          });
+        
+        console.log(`Отображение ${heatmapData.length} точек рассеивания ветром (timelineActive: ${timelineActive})`);
+        
+        // Создаем новый слой с точками распространения только если есть данные
+        if (heatmapData.length > 0) {
+          windDispersionLayerRef.current = L.heatLayer(heatmapData, {
+            radius: 15,
+            blur: 20,
+            maxZoom: 18,
+            gradient: {
+              0.0: 'rgba(0, 128, 255, 0.7)',
+              0.3: 'rgba(0, 255, 255, 0.7)',
+              0.5: 'rgba(255, 255, 0, 0.8)',
+              0.7: 'rgba(255, 128, 0, 0.9)',
+              1.0: 'rgba(255, 0, 0, 1.0)'
+            }
+          }).addTo(map);
         }
-      }).addTo(map);
+      }
+    } catch (error) {
+      console.error('Ошибка при создании слоя распространения:', error);
     }
     
   }, [map, dispersedPoints, timeDispersionPoints, timelineActive, updateHeatmap]);
@@ -741,7 +759,20 @@ const UserLocationControl = () => {
   const { setUserLocation, userLocation } = useMapStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showErrorNotification, setShowErrorNotification] = useState(false);
   const locationControlRef = useRef(null);
+  
+  // Обработчик закрытия уведомления
+  const handleCloseNotification = () => {
+    setShowErrorNotification(false);
+  };
+  
+  // Показываем уведомление при ошибке
+  useEffect(() => {
+    if (error) {
+      setShowErrorNotification(true);
+    }
+  }, [error]);
   
   // Функция для определения местоположения пользователя
   const getUserLocation = useCallback(() => {
@@ -768,7 +799,23 @@ const UserLocationControl = () => {
       },
       (err) => {
         console.error("Ошибка при получении местоположения:", err);
-        setError(`Не удалось определить местоположение: ${err.message}`);
+        
+        // Устанавливаем местоположение по умолчанию при ошибке
+        const defaultLocation = { lat: 55.0084, lng: 82.9357 }; // Новосибирск
+        console.log(`Используем местоположение по умолчанию: ${defaultLocation.lat}, ${defaultLocation.lng}`);
+        setUserLocation(defaultLocation);
+        
+        // Отображаем дружелюбное сообщение об ошибке
+        let errorMessage = "Не удалось определить местоположение";
+        if (err.code === 1) {
+          errorMessage = "Доступ к геолокации запрещен. Это может быть связано с использованием HTTP вместо HTTPS.";
+        } else if (err.code === 2) {
+          errorMessage = "Местоположение недоступно.";
+        } else if (err.code === 3) {
+          errorMessage = "Превышено время ожидания при определении местоположения.";
+        }
+        
+        setError(errorMessage);
         setLoading(false);
       },
       { 
@@ -872,7 +919,41 @@ const UserLocationControl = () => {
     };
   }, [map, getUserLocation]);
   
-  return null;
+  return (
+    <>
+      {showErrorNotification && (
+        <Paper
+          elevation={4}
+          sx={{
+            position: 'absolute',
+            bottom: '120px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1800,
+            padding: 2,
+            maxWidth: '80%',
+            backgroundColor: '#fffcf4',
+            borderRadius: 2,
+            border: '2px solid #e2b007',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Box sx={{ mr: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {error}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={handleCloseNotification}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Paper>
+      )}
+    </>
+  );
 };
 
 // Добавляем функцию debounce, если нет lodash

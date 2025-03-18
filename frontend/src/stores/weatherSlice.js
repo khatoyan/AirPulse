@@ -11,6 +11,11 @@ export const createWeatherSlice = (set, get) => ({
   setWeatherData: (data) => {
     console.log('Установка данных о погоде:', data);
     
+    if (!data) {
+      console.error('Ошибка: данные о погоде отсутствуют');
+      return;
+    }
+    
     // Нормализуем данные о ветре
     const normalizedData = {
       ...data,
@@ -19,7 +24,8 @@ export const createWeatherSlice = (set, get) => ({
     };
     
     // Проверяем наличие необходимых полей
-    if (!normalizedData.windSpeed || typeof normalizedData.windDirection !== 'number') {
+    if (normalizedData.windSpeed === undefined || normalizedData.windSpeed === null || 
+        normalizedData.windDirection === undefined || normalizedData.windDirection === null) {
       console.error('Ошибка: некорректные данные о погоде', normalizedData);
       return;
     }
@@ -52,7 +58,8 @@ export const createWeatherSlice = (set, get) => ({
     }
     
     // Проверяем данные о ветре
-    if (!weatherData.windSpeed || typeof weatherData.windDirection !== 'number') {
+    if (weatherData.windSpeed === undefined || weatherData.windSpeed === null || 
+        weatherData.windDirection === undefined || weatherData.windDirection === null) {
       console.error('Ошибка: некорректные данные о ветре', weatherData);
       return;
     }
