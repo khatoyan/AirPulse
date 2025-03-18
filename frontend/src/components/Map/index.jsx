@@ -17,6 +17,7 @@ import MyLocationIcon from '@mui/icons-material/MyLocation';
 import CloseIcon from '@mui/icons-material/Close';
 // Импортируем компоненты временной шкалы
 import TimeSlider from './TimeSlider';
+import FloweringAlert from './FloweringAlert';
 import { normalizeIntensity, getPointRadius, getColorForSeverity, normalizeIntensityWithTime } from '../../utils/mapUtils';
 
 // Импорт иконок для меток
@@ -975,13 +976,14 @@ function Map() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   return (
-    <Box sx={{ position: 'relative', height: '550px', width: '100%' }}>
+    <Box sx={{ position: 'relative', width: '100%', height: '80vh' }}>
       <MapContainer
         center={[55.0084, 82.9357]} // Новосибирск как начальный центр
         zoom={11}
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
       >
+        <FloweringAlert />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

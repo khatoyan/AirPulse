@@ -4,7 +4,7 @@ import { config } from './config';
 import { reportsRouter } from './routes/reports';
 import { zonesRouter } from './routes/zones';
 import { weatherRouter } from './routes/weather';
-import { plantsRouter } from './routes/plants';
+import plantsRouter from './routes/plants';
 import { authRouter } from './routes/auth';
 import { requestLogger } from './middleware/logging';
 

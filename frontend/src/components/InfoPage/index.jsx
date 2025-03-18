@@ -14,7 +14,8 @@ import {
   HealthAndSafety as HealthIcon,
   Biotech as AsthmaIcon,
   Quiz as TestIcon,
-  QuestionAnswer as FAQIcon
+  QuestionAnswer as FAQIcon,
+  CalendarMonth as CalendarIcon
 } from '@mui/icons-material';
 
 // Основной компонент информационной страницы
@@ -31,6 +32,7 @@ function InfoPage() {
     if (path === '/info/asthma') return 1;
     if (path === '/info/test') return 2;
     if (path === '/info/faq') return 3;
+    if (path === '/info/calendar') return 4;
     return 0;
   };
 
@@ -51,8 +53,11 @@ function InfoPage() {
       case 3:
         navigate('/info/faq');
         break;
+      case 4:
+        navigate('/info/calendar');
+        break;
       default:
-        navigate('/info');
+        navigate('/info/allergy');
     }
   };
 
@@ -123,6 +128,11 @@ function InfoPage() {
             <Tab 
               label="FAQ" 
               icon={<FAQIcon />} 
+              iconPosition="start"
+            />
+            <Tab 
+              label={isMobile ? "Календарь" : "Календарь цветения"} 
+              icon={<CalendarIcon />} 
               iconPosition="start"
             />
           </Tabs>

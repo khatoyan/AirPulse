@@ -5,135 +5,128 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
-// Получить все растения
+// Get all plants
 router.get('/', async (req, res) => {
   try {
     const plants = await prisma.plant.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: {
+        name: 'asc'
+      }
     });
+    
     res.json(plants);
   } catch (error) {
-    console.error('Ошибка при получении растений:', error);
-    res.status(500).json({ error: 'Ошибка при получении растений' });
+    console.error('Error fetching plants:', error);
+    res.status(500).json({ error: 'Failed to fetch plants' });
   }
 });
 
-// Получить растение по ID
+// Get currently flowering plants
+router.get('/flowering', async (req, res) => {
+  try {
+    // Получение текущего месяца в нижнем регистре на русском языке
+    const currentMonth = new Date().toLocaleString('ru-RU', { month: 'long' }).toLowerCase();
+    console.log('Текущий месяц:', currentMonth);
+    
+    // Словарь месяцев для корректного сравнения (порядковые номера)
+    const monthOrder: Record<string, number> = {
+      'январь': 1, 'февраль': 2, 'март': 3, 'апрель': 4, 
+      'май': 5, 'июнь': 6, 'июль': 7, 'август': 8, 
+      'сентябрь': 9, 'октябрь': 10, 'ноябрь': 11, 'декабрь': 12
+    };
+    
+    // Номер текущего месяца
+    const currentMonthNumber = monthOrder[currentMonth];
+    console.log('Номер текущего месяца:', currentMonthNumber);
+    
+    if (!currentMonthNumber) {
+      return res.status(500).json({ error: 'Не удалось определить текущий месяц' });
+    }
+    
+    // Получаем все растения
+    const allPlants = await prisma.plant.findMany();
+    
+    // Фильтруем растения, которые цветут в текущем месяце
+    const floweringPlants = allPlants.filter(plant => {
+      if (!plant.bloomStart || !plant.bloomEnd) return false;
+      
+      // Получаем месяцы начала и конца цветения
+      const bloomStartLower = plant.bloomStart.toLowerCase();
+      const bloomEndLower = plant.bloomEnd.toLowerCase();
+      
+      console.log(`Растение: ${plant.name}, начало: ${bloomStartLower}, конец: ${bloomEndLower}`);
+      
+      // Получаем порядковые номера месяцев
+      const startMonth = monthOrder[bloomStartLower];
+      const endMonth = monthOrder[bloomEndLower];
+      
+      if (!startMonth || !endMonth) {
+        console.log(`Некорректный формат месяца для растения ${plant.name}`);
+        return false;
+      }
+      
+      console.log(`Растение: ${plant.name}, номер начала: ${startMonth}, номер конца: ${endMonth}`);
+      
+      // Проверяем, цветет ли растение в текущем месяце
+      if (startMonth <= endMonth) {
+        // Обычный случай (например, с апреля по июнь)
+        return currentMonthNumber >= startMonth && currentMonthNumber <= endMonth;
+      } else {
+        // Случай, когда цветение пересекает границу года (например, с ноября по февраль)
+        return currentMonthNumber >= startMonth || currentMonthNumber <= endMonth;
+      }
+    });
+    
+    console.log(`Найдено ${floweringPlants.length} цветущих растений`);
+    res.json(floweringPlants);
+  } catch (error) {
+    console.error('Error fetching flowering plants:', error);
+    res.status(500).json({ error: 'Failed to fetch flowering plants' });
+  }
+});
+
+// Get plant by ID
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const plant = await prisma.plant.findUnique({
-      where: { id: Number(id) },
-      include: {
-        reports: {
-          where: { approved: true }
-        }
+      where: {
+        id: parseInt(id)
       }
     });
     
     if (!plant) {
-      return res.status(404).json({ error: 'Растение не найдено' });
+      return res.status(404).json({ error: 'Plant not found' });
     }
     
     res.json(plant);
   } catch (error) {
-    console.error('Ошибка при получении растения:', error);
-    res.status(500).json({ error: 'Ошибка при получении растения' });
+    console.error('Error fetching plant:', error);
+    res.status(500).json({ error: 'Failed to fetch plant' });
   }
 });
 
-// Создать новое растение (только для админов)
+// Create new plant (admin only)
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { 
-      name, 
-      latinName, // Фронтенд отправляет latinName вместо species
-      description, 
-      season, // Фронтенд отправляет season вместо bloomStart/bloomEnd
-      allergyLevel, // Фронтенд отправляет allergyLevel вместо allergenicity
-      category, // Дополнительное поле с фронтенда
-      icon // Дополнительное поле с фронтенда
-    } = req.body;
+    const { name, species, description, bloomStart, bloomEnd, allergenicity } = req.body;
     
-    console.log('Получены данные растения:', req.body);
-    
-    // Преобразуем данные в формат, ожидаемый Prisma
-    const plant = await prisma.plant.create({
+    const newPlant = await prisma.plant.create({
       data: {
         name,
-        species: latinName || '', // Используем latinName как species
+        species,
         description,
-        bloomStart: season || null, // Используем season как bloomStart
-        bloomEnd: season || null, // Используем season как bloomEnd
-        allergenicity: allergyLevel ? Number(allergyLevel) : 0 // Используем allergyLevel как allergenicity
-        // Поля category и icon не используются в схеме Prisma
+        bloomStart,
+        bloomEnd,
+        allergenicity: parseInt(allergenicity)
       }
     });
     
-    res.status(201).json(plant);
+    res.status(201).json(newPlant);
   } catch (error) {
-    console.error('Ошибка при создании растения:', error);
-    res.status(500).json({ error: 'Ошибка при создании растения' });
+    console.error('Error creating plant:', error);
+    res.status(500).json({ error: 'Failed to create plant' });
   }
 });
 
-// Обновить растение (только для админов)
-router.put('/:id', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { 
-      name, 
-      latinName, // Фронтенд отправляет latinName вместо species
-      description, 
-      season, // Фронтенд отправляет season вместо bloomStart/bloomEnd
-      allergyLevel, // Фронтенд отправляет allergyLevel вместо allergenicity
-      category, // Дополнительное поле с фронтенда
-      icon // Дополнительное поле с фронтенда
-    } = req.body;
-    
-    console.log('Получены данные для обновления растения:', req.body);
-    
-    const plant = await prisma.plant.update({
-      where: { id: Number(id) },
-      data: {
-        name,
-        species: latinName || '', // Используем latinName как species
-        description,
-        bloomStart: season || null, // Используем season как bloomStart
-        bloomEnd: season || null, // Используем season как bloomEnd
-        allergenicity: allergyLevel ? Number(allergyLevel) : 0 // Используем allergyLevel как allergenicity
-        // Поля category и icon не используются в схеме Prisma
-      }
-    });
-    
-    res.json(plant);
-  } catch (error) {
-    console.error('Ошибка при обновлении растения:', error);
-    res.status(500).json({ error: 'Ошибка при обновлении растения' });
-  }
-});
-
-// Удалить растение (только для админов)
-router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Сначала обновляем все отчеты, связанные с этим растением
-    await prisma.report.updateMany({
-      where: { plantId: Number(id) },
-      data: { plantId: null }
-    });
-    
-    // Затем удаляем само растение
-    await prisma.plant.delete({
-      where: { id: Number(id) }
-    });
-    
-    res.json({ message: 'Растение успешно удалено', id: Number(id) });
-  } catch (error) {
-    console.error('Ошибка при удалении растения:', error);
-    res.status(500).json({ error: 'Ошибка при удалении растения' });
-  }
-});
-
-export const plantsRouter = router; 
+export default router; 

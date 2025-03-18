@@ -17,6 +17,7 @@ import AllergyInfoTab from './components/InfoPage/AllergyInfoTab';
 import AsthmaInfoTab from './components/InfoPage/AsthmaInfoTab';
 import AllergyTestTab from './components/InfoPage/AllergyTestTab';
 import FAQTab from './components/InfoPage/FAQTab';
+import FloweringCalendar from './components/InfoPage/FloweringCalendar';
 import Header from './components/Header';
 import Footer from './components/Footer';
 
@@ -77,7 +78,9 @@ function App() {
           }}
         >
           <Routes>
-            <Route path="/" element={<MainApp />} />
+            <Route path="/" element={<Navigate to="/map" replace />} />
+            <Route path="/map" element={<MainApp />} />
+            <Route path="/calendar" element={<FloweringCalendar />} />
             <Route
               path="/login" 
               element={
@@ -107,6 +110,7 @@ function App() {
               <Route path="asthma" element={<AsthmaInfoTab />} />
               <Route path="test" element={<AllergyTestTab />} />
               <Route path="faq" element={<FAQTab />} />
+              <Route path="calendar" element={<FloweringCalendar />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

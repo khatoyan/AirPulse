@@ -36,7 +36,8 @@ import {
   Map as MapIcon,
   Close as CloseIcon,
   HealthAndSafety as HealthIcon,
-  MedicalInformation as MedicalIcon
+  MedicalInformation as MedicalIcon,
+  CalendarMonth as CalendarIcon
 } from '@mui/icons-material';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -64,6 +65,13 @@ function Header() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Определяем основные пункты меню - moved before it's used
+  const menuItems = [
+    { text: 'Карта', icon: <MapIcon />, link: '/map' },
+    { text: 'Календарь цветения', icon: <CalendarIcon />, link: '/calendar' },
+    { text: 'Полезная информация', icon: <InfoIcon />, link: '/info' },
+  ];
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -108,26 +116,14 @@ function Header() {
       <Divider sx={{ mb: 2 }} />
       
       <List>
-        <ListItem button component={RouterLink} to="/">
-          <ListItemIcon>
-            <HomeIcon color="primary" />
-          </ListItemIcon>
-          <ListItemText primary="Главная" />
-        </ListItem>
-        
-        <ListItem button component={RouterLink} to="/info">
-          <ListItemIcon>
-            <HealthIcon color="primary" />
-          </ListItemIcon>
-          <ListItemText primary="Информация об аллергии" />
-        </ListItem>
-        
-        <ListItem button component={RouterLink} to="/about">
-          <ListItemIcon>
-            <InfoIcon color="primary" />
-          </ListItemIcon>
-          <ListItemText primary="О проекте" />
-        </ListItem>
+        {menuItems.map((item) => (
+          <ListItem button key={item.text} component={RouterLink} to={item.link}>
+            <ListItemIcon>
+              {React.cloneElement(item.icon, { color: "primary" })}
+            </ListItemIcon>
+            <ListItemText primary={item.text} />
+          </ListItem>
+        ))}
       </List>
       
       <Divider sx={{ my: 2 }} />
@@ -174,7 +170,7 @@ function Header() {
     <ElevationScroll>
       <AppBar position="sticky" color="inherit">
         <Container maxWidth="lg">
-          <Toolbar disableGutters sx={{ py: 0.5 }}>
+          <Toolbar disableGutters sx={{ py: 1.5 }}>
             {/* Кнопка мобильного меню */}
             {isMobile && (
               <IconButton
@@ -198,11 +194,11 @@ function Header() {
                 sx={{ 
                   mr: 1, 
                   color: 'primary.main',
-                  fontSize: '2rem'
+                  fontSize: '2.5rem'
                 }} 
               />
               <Typography
-                variant="h6"
+                variant="h5"
                 component={RouterLink}
                 to="/"
                 sx={{
@@ -223,11 +219,13 @@ function Header() {
 
             {/* Заголовок (только на десктопах) */}
             <Typography 
-              variant="subtitle2" 
+              variant="subtitle1" 
               color="text.secondary"
               sx={{ 
                 flexGrow: 1,
-                display: { xs: 'none', md: 'block' }
+                display: { xs: 'none', md: 'block' },
+                ml: 2,
+                fontWeight: 500
               }}
             >
               Мониторинг пыльцы и аллергенов
@@ -236,31 +234,23 @@ function Header() {
             {/* Меню навигации для десктопа */}
             {!isMobile && (
               <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
-                <Button
-                  component={RouterLink}
-                  to="/"
-                  color="inherit"
-                  sx={{
-                    mx: 1,
-                    '&:hover': { color: 'primary.main' },
-                  }}
-                >
-                  Главная
-                </Button>
-                <Button
-                  component={RouterLink}
-                  to="/info"
-                  color="inherit"
-                  sx={{
-                    mx: 1,
-                    '&:hover': { color: 'primary.main' },
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}
-                >
-                  <HealthIcon sx={{ mr: 0.5, fontSize: '1rem' }} />
-                  Полезная информация
-                </Button>
+                {menuItems.map((item) => (
+                  <Button
+                    key={item.text}
+                    component={RouterLink}
+                    to={item.link}
+                    color="inherit"
+                    sx={{
+                      mx: 1,
+                      '&:hover': { color: 'primary.main' },
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    {React.cloneElement(item.icon, { sx: { mr: 1.5, fontSize: '1rem' } })}
+                    {item.text}
+                  </Button>
+                ))}
               </Box>
             )}
 
