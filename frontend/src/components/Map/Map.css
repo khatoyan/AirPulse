@@ -1,5 +1,5 @@
 .map-container {
-  height: 80vh;
+  height: 60vh;
   width: 100%;
   position: relative;
   z-index: 1;
@@ -287,4 +287,9 @@
   display: block !important;
   visibility: visible !important;
   z-index: 1000 !important;
+}
+
+/* Скрываем флаг в блоке атрибуции Leaflet */
+.leaflet-control-attribution .leaflet-attribution-flag {
+  display: none !important;
 } 

@@ -975,7 +975,7 @@ function Map() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   return (
-    <Box sx={{ position: 'relative', height: isMobile ? 'calc(100vh - 56px)' : '90vh', width: '100%' }}>
+    <Box sx={{ position: 'relative', height: '550px', width: '100%' }}>
       <MapContainer
         center={[55.0084, 82.9357]} // Новосибирск как начальный центр
         zoom={11}

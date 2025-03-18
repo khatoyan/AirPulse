@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Map from '../Map';
-import Header from '../Header';
-import Footer from '../Footer';
 import { useMapStore } from '../../stores/mapStore';
 import { reportsService, weatherService } from '../../services/api';
 import { calculatePollenDispersion } from '../../utils/pollenDispersion';
@@ -112,15 +110,11 @@ function MainApp() {
   }, [lastUpdate]);
 
   return (
-    <>
-      <Header />
-      <main className="app-main">
-        <Map />
-        {/* Можно добавить время последнего обновления, если нужно */}
-        {/* <div className="update-info">Обновлено: {updateTimeString}</div> */}
-      </main>
-      <Footer />
-    </>
+    <main className="app-main">
+      <Map />
+      {/* Можно добавить время последнего обновления, если нужно */}
+      {/* <div className="update-info">Обновлено: {updateTimeString}</div> */}
+    </main>
   );
 }
 

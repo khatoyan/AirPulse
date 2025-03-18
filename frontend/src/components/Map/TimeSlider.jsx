@@ -184,7 +184,8 @@ const TimeSlider = () => {
       <Box 
         sx={{ 
           position: 'absolute', 
-          bottom: isMobile ? '130px' : '70px', 
+          top: isMobile ? '10px' : 'auto',
+          bottom: isMobile ? 'auto' : '70px', 
           right: '10px', 
           zIndex: 1000 
         }}
@@ -215,9 +216,10 @@ const TimeSlider = () => {
         onClick={handleContainerClick}
         sx={{
           position: 'absolute',
-          top: isMobile ? 'auto' : '90px',
-          left: isMobile ? '10px' : '10px',
-          bottom: isMobile ? '130px' : 'auto',
+          top: isMobile ? '10px' : '90px',
+          left: isMobile ? 'auto' : '10px',
+          right: isMobile ? '10px' : 'auto',
+          bottom: isMobile ? 'auto' : 'auto',
           padding: '8px 12px',
           zIndex: 1600,
           backgroundColor: 'white',

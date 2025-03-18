@@ -70,7 +70,7 @@ const airPulseColors = {
 };
 
 // Создание новой темы
-export const theme = createTheme({
+const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
@@ -367,3 +367,5 @@ export const theme = createTheme({
     },
   },
 }); 
+
+export default theme; 

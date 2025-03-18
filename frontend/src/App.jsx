@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import MainApp from './components/MainApp';
 import AdminPanel from './components/Admin/AdminPanel';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -10,11 +10,21 @@ import { CircularProgress, Box } from '@mui/material';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
+import { ThemeProvider } from '@mui/material/styles';
+import theme from './theme';
+import InfoPage from './components/InfoPage';
+import AllergyInfoTab from './components/InfoPage/AllergyInfoTab';
+import AsthmaInfoTab from './components/InfoPage/AsthmaInfoTab';
+import AllergyTestTab from './components/InfoPage/AllergyTestTab';
+import FAQTab from './components/InfoPage/FAQTab';
+import Header from './components/Header';
+import Footer from './components/Footer';
 
 // Основной компонент приложения с маршрутизацией
 function App() {
   const { isAuthenticated, isAdmin, checkAuth, isLoading } = useAuthStore();
   const [authChecked, setAuthChecked] = useState(false);
+  const location = useLocation();
 
   // Проверяем аутентификацию при загрузке приложения
   useEffect(() => {
@@ -29,52 +39,81 @@ function App() {
   // Показываем индикатор загрузки, пока проверяем аутентификацию
   if (isLoading || !authChecked) {
     return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          height: '100vh' 
-        }}
-      >
-        <CircularProgress />
-      </Box>
+      <ThemeProvider theme={theme}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '100vh' 
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      </ThemeProvider>
     );
   }
 
   return (
-    <Router>
-      <div className="app" role="main">
+    <ThemeProvider theme={theme}>
+      <Box
+        className="App"
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100vh',
+          bgcolor: 'background.default',
+        }}
+      >
+        <Header />
         <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} />
-        <Routes>
-          <Route path="/" element={<MainApp />} />
-          <Route 
-            path="/admin/*" 
-            element={
-              <ProtectedRoute 
-                isAllowed={isAuthenticated && isAdmin}
-                redirectPath="/login"
-              >
-                <AdminPanel />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/login" 
-            element={
-              isAuthenticated ? <Navigate to="/" replace /> : <Login />
-            } 
-          />
-          <Route 
-            path="/register" 
-            element={
-              isAuthenticated ? <Navigate to="/" replace /> : <Register />
-            } 
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
-    </Router>
+        
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Routes>
+            <Route path="/" element={<MainApp />} />
+            <Route
+              path="/login" 
+              element={
+                isAuthenticated ? <Navigate to="/" replace /> : <Login />
+              }
+            />
+            <Route 
+              path="/register" 
+              element={
+                isAuthenticated ? <Navigate to="/" replace /> : <Register />
+              } 
+            />
+            <Route
+              path="/admin/*" 
+              element={
+                <ProtectedRoute 
+                  isAllowed={isAuthenticated && isAdmin}
+                  redirectPath="/login"
+                >
+                  <AdminPanel />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/info/*" element={<InfoPage />}>
+              <Route index element={<AllergyInfoTab />} />
+              <Route path="allergy" element={<AllergyInfoTab />} />
+              <Route path="asthma" element={<AsthmaInfoTab />} />
+              <Route path="test" element={<AllergyTestTab />} />
+              <Route path="faq" element={<FAQTab />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Box>
+        <Footer />
+      </Box>
+    </ThemeProvider>
   );
 }
 

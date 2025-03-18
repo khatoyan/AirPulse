@@ -34,7 +34,9 @@ import {
   Home as HomeIcon,
   Info as InfoIcon,
   Map as MapIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  HealthAndSafety as HealthIcon,
+  MedicalInformation as MedicalIcon
 } from '@mui/icons-material';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -113,11 +115,11 @@ function Header() {
           <ListItemText primary="Главная" />
         </ListItem>
         
-        <ListItem button component={RouterLink} to="/map">
+        <ListItem button component={RouterLink} to="/info">
           <ListItemIcon>
-            <MapIcon color="primary" />
+            <HealthIcon color="primary" />
           </ListItemIcon>
-          <ListItemText primary="Карта аллергенов" />
+          <ListItemText primary="Информация об аллергии" />
         </ListItem>
         
         <ListItem button component={RouterLink} to="/about">
@@ -230,6 +232,37 @@ function Header() {
             >
               Мониторинг пыльцы и аллергенов
             </Typography>
+
+            {/* Меню навигации для десктопа */}
+            {!isMobile && (
+              <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
+                <Button
+                  component={RouterLink}
+                  to="/"
+                  color="inherit"
+                  sx={{
+                    mx: 1,
+                    '&:hover': { color: 'primary.main' },
+                  }}
+                >
+                  Главная
+                </Button>
+                <Button
+                  component={RouterLink}
+                  to="/info"
+                  color="inherit"
+                  sx={{
+                    mx: 1,
+                    '&:hover': { color: 'primary.main' },
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <HealthIcon sx={{ mr: 0.5, fontSize: '1rem' }} />
+                  Полезная информация
+                </Button>
+              </Box>
+            )}
 
             {/* Пользовательский блок - только для десктопа */}
             {!isMobile && (
