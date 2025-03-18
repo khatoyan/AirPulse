@@ -20,14 +20,18 @@ export const createWeatherSlice = (set, get) => ({
     const normalizedData = {
       ...data,
       windSpeed: data.windSpeed || data.wind_speed || 0,
-      windDirection: data.windDirection || data.wind_deg || data.wind_direction || 0
+      windDirection: data.windDirection || data.wind_deg || data.windDeg || 0
     };
     
-    // Проверяем наличие необходимых полей
-    if (normalizedData.windSpeed === undefined || normalizedData.windSpeed === null || 
-        normalizedData.windDirection === undefined || normalizedData.windDirection === null) {
-      console.error('Ошибка: некорректные данные о погоде', normalizedData);
-      return;
+    // Явно устанавливаем значения по умолчанию для ветра
+    if (normalizedData.windSpeed === undefined || normalizedData.windSpeed === null) {
+      console.warn('Отсутствует скорость ветра, устанавливаем 0');
+      normalizedData.windSpeed = 0;
+    }
+    
+    if (normalizedData.windDirection === undefined || normalizedData.windDirection === null) {
+      console.warn('Отсутствует направление ветра, устанавливаем 0');
+      normalizedData.windDirection = 0;
     }
     
     set({ weatherData: normalizedData });
@@ -57,18 +61,15 @@ export const createWeatherSlice = (set, get) => ({
       return;
     }
     
-    // Проверяем данные о ветре
-    if (weatherData.windSpeed === undefined || weatherData.windSpeed === null || 
-        weatherData.windDirection === undefined || weatherData.windDirection === null) {
-      console.error('Ошибка: некорректные данные о ветре', weatherData);
-      return;
-    }
+    // Используем нормализованные данные или значения по умолчанию
+    const windSpeed = typeof weatherData.windSpeed === 'number' ? weatherData.windSpeed : 0;
+    const windDirection = typeof weatherData.windDirection === 'number' ? weatherData.windDirection : 0;
     
     // Создаем новый массив точек распространения
     const dispersedPoints = calculatePollenDispersion(
       approvedReports,
-      weatherData.windSpeed,
-      weatherData.windDirection
+      windSpeed,
+      windDirection
     );
     
     console.log(`Сгенерировано ${dispersedPoints.length} точек распространения`);

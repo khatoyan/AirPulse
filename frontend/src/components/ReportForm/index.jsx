@@ -44,7 +44,6 @@ function ReportForm({ location, onClose }) {
   const [reportType, setReportType] = useState('symptom');
   const [plants, setPlants] = useState([]);
   const [loading, setLoading] = useState(false);
-  const selectRef = useRef(null);
   
   console.log('Компонент ReportForm рендерится. Местоположение:', location);
 
@@ -272,55 +271,6 @@ function ReportForm({ location, onClose }) {
     { value: 5, label: '5' },
   ];
 
-  // Функция для проверки стилей и отладки
-  const inspectSelectElement = () => {
-    if (selectRef.current) {
-      console.log('Элемент Select:', selectRef.current);
-      const computedStyle = window.getComputedStyle(selectRef.current);
-      console.log('Вычисленные стили для Select:', {
-        display: computedStyle.display,
-        visibility: computedStyle.visibility,
-        position: computedStyle.position,
-        zIndex: computedStyle.zIndex,
-        opacity: computedStyle.opacity,
-        pointerEvents: computedStyle.pointerEvents
-      });
-    } else {
-      console.log('Select ref не доступен');
-    }
-  };
-
-  // Тестовая функция для открытия выпадающего списка программно
-  const forceOpenSelect = () => {
-    console.log('Пытаемся программно открыть выпадающий список');
-    if (selectRef.current) {
-      try {
-        // Пытаемся программно активировать элемент
-        selectRef.current.click();
-        selectRef.current.focus();
-        console.log('Фокус установлен на Select');
-      } catch (e) {
-        console.error('Ошибка при программном открытии списка:', e);
-      }
-    }
-  };
-
-  // Проверяем стили после монтирования
-  useEffect(() => {
-    setTimeout(() => {
-      inspectSelectElement();
-    }, 500);
-  }, []);
-
-  // Отладка открытия Select
-  const handleSelectFocus = (e) => {
-    console.log('Select получил фокус:', e);
-  };
-
-  const handleSelectClick = (e) => {
-    console.log('Click на Select:', e);
-  };
-
   return (
     <>
       <Dialog 
@@ -396,15 +346,18 @@ function ReportForm({ location, onClose }) {
                       );
                     })
                   }
-                  renderOption={(props, option) => (
-                    <li {...props}>
-                      <Checkbox
-                        checked={formData.symptoms.indexOf(option) > -1}
-                        sx={{ mr: 1 }}
-                      />
-                      {option}
-                    </li>
-                  )}
+                  renderOption={(props, option) => {
+                    const { key, ...restProps } = props;
+                    return (
+                      <li key={key} {...restProps}>
+                        <Checkbox
+                          checked={formData.symptoms.indexOf(option) > -1}
+                          sx={{ mr: 1 }}
+                        />
+                        {option}
+                      </li>
+                    );
+                  }}
                   componentsProps={{
                     popper: {
                       sx: {

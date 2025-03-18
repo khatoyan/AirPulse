@@ -410,110 +410,6 @@ const WeatherDataLoader = () => {
   ) : null;
 };
 
-// Компонент для отображения индикатора ветра
-const WindIndicator = () => {
-  const { weatherData } = useMapStore();
-  const map = useMap();
-  const windControlRef = useRef(null);
-  
-  useEffect(() => {
-    if (!map) return;
-    
-    // Создаем кастомный контрол для отображения направления ветра
-    if (!windControlRef.current) {
-      const WindControl = L.Control.extend({
-        options: {
-          position: 'bottomleft' // Меняем позицию на bottomleft
-        },
-        
-        onAdd: function() {
-          const container = L.DomUtil.create('div', 'wind-indicator-container');
-          container.style.background = 'white';
-          container.style.padding = '10px';
-          container.style.borderRadius = '5px';
-          container.style.boxShadow = '0 3px 8px rgba(0,0,0,0.4)';
-          container.style.width = '150px';
-          container.style.margin = '10px';
-          container.style.border = '2px solid #1976d2';
-          container.style.zIndex = '1700'; // Увеличиваем z-index
-          container.style.opacity = '1'; // Полная непрозрачность
-          
-          const title = L.DomUtil.create('div', 'wind-title', container);
-          title.innerHTML = 'Ветер';
-          title.style.fontWeight = 'bold';
-          title.style.marginBottom = '5px';
-          title.style.color = '#1976d2';
-          title.style.fontSize = '14px';
-          
-          const content = L.DomUtil.create('div', 'wind-content', container);
-          content.innerHTML = 'Нет данных';
-          content.style.fontWeight = '500';
-          content.style.fontSize = '13px';
-          
-          const arrow = L.DomUtil.create('div', 'wind-arrow', container);
-          arrow.innerHTML = '↑';
-          arrow.style.fontSize = '30px';
-          arrow.style.textAlign = 'center';
-          arrow.style.transform = 'rotate(0deg)';
-          arrow.style.marginTop = '5px';
-          arrow.style.color = '#1976d2';
-          
-          container.title = 'Направление и скорость ветра';
-          
-          this._container = container;
-          this._content = content;
-          this._arrow = arrow;
-          
-          return container;
-        },
-        
-        update: function(data) {
-          if (!data) {
-            this._content.innerHTML = 'Нет данных';
-            this._arrow.style.display = 'none';
-            return;
-          }
-          
-          const { windSpeed, windDeg } = data;
-          
-          // Направление, откуда дует ветер
-          const windDirection = this._getWindDirection(windDeg);
-          
-          this._content.innerHTML = `${windSpeed.toFixed(1)} м/с, ${windDirection}`;
-          this._arrow.style.display = 'block';
-          
-          // Стрелка показывает, куда дует ветер (противоположно направлению windDeg)
-          // windDeg указывает направление, откуда дует ветер
-          this._arrow.style.transform = `rotate(${windDeg}deg)`;
-        },
-        
-        _getWindDirection: function(degrees) {
-          const directions = ['С', 'ССВ', 'СВ', 'ВСВ', 'В', 'ВЮВ', 'ЮВ', 'ЮЮВ', 'Ю', 'ЮЮЗ', 'ЮЗ', 'ЗЮЗ', 'З', 'ЗСЗ', 'СЗ', 'ССЗ'];
-          const index = Math.round(degrees / 22.5) % 16;
-          return directions[index];
-        }
-      });
-      
-      windControlRef.current = new WindControl();
-      map.addControl(windControlRef.current);
-    }
-    
-    // Обновляем индикатор при изменении данных о ветре
-    if (weatherData && windControlRef.current) {
-      windControlRef.current.update(weatherData);
-    }
-    
-    return () => {
-      if (windControlRef.current) {
-        map.removeControl(windControlRef.current);
-        windControlRef.current = null;
-      }
-    };
-  }, [map, weatherData]);
-  
-  return null;
-};
-
 // Компонент для отображения погодной информации и объяснения ее влияния на рассеивание пыльцы
 const WeatherInfoPanel = () => {
   const { weatherData } = useMapStore();
@@ -719,7 +615,7 @@ const WeatherInfoPanel = () => {
   );
 };
 
-// Компонент для загрузки прогноза погоды
+// Компонент для загрузки данных прогноза
 const ForecastDataLoader = () => {
   const { loadForecast, forecastData } = useMapStore();
   const map = useMap();
@@ -728,7 +624,7 @@ const ForecastDataLoader = () => {
     // Загружаем прогноз при монтировании компонента
     if (!forecastData || forecastData.length === 0) {
       const center = map.getCenter();
-      console.log('Загрузка прогноза погоды при инициализации карты:', center);
+      console.log(`Загрузка прогноза погоды при инициализации карты: ${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`);
       loadForecast(center.lat, center.lng);
     }
     
@@ -737,7 +633,7 @@ const ForecastDataLoader = () => {
       // Ограничиваем частоту обновления - запрашиваем новый прогноз только 
       // если карта была значительно перемещена (более 20 км)
       const center = map.getCenter();
-      console.log('Карта перемещена, обновляем прогноз погоды:', center);
+      console.log(`Карта перемещена, обновляем прогноз погоды: ${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`);
       loadForecast(center.lat, center.lng);
     };
     
@@ -1034,7 +930,6 @@ function Map() {
         <PointMarkers />
         
         <WeatherInfoPanel />
-        <WindIndicator />
         
         <AllergenSelector />
         <TimeSlider />

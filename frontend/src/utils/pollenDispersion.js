@@ -11,17 +11,17 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
     return [];
   }
   
-  // Нормализуем данные о ветре
-  // Проверяем наличие скорости и направления ветра
-  if (typeof windSpeed !== 'number') {
-    console.error('Некорректная скорость ветра:', windSpeed);
-    return [];
-  }
+  // Гарантируем, что windSpeed и windDirection - числа
+  const safeWindSpeed = typeof windSpeed === 'number' && !isNaN(windSpeed) ? windSpeed : 0;
+  const safeWindDirection = typeof windDirection === 'number' && !isNaN(windDirection) ? windDirection : 0;
   
-  // windDirection может быть передан как windDeg в некоторых случаях
-  if (typeof windDirection !== 'number') {
-    console.error('Некорректные данные о ветре:', { windSpeed, windDirection });
-    return [];
+  if (safeWindSpeed !== windSpeed || safeWindDirection !== windDirection) {
+    console.warn('Скорректированы параметры ветра:', {
+      исходная_скорость: windSpeed,
+      исправленная_скорость: safeWindSpeed,
+      исходное_направление: windDirection,
+      исправленное_направление: safeWindDirection
+    });
   }
   
   // Лимитируем количество точек для производительности
@@ -30,7 +30,7 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
     ? reports.slice(0, maxSourcePoints) 
     : reports;
 
-  console.log(`Расчет распространения пыльцы для ${limitedReports.length} отчетов с ветром ${windSpeed} м/с, ${windDirection}°`);
+  console.log(`Расчет распространения пыльцы для ${limitedReports.length} отчетов с ветром ${safeWindSpeed} м/с, ${safeWindDirection}°`);
   
   if (timeIndex !== null) {
     console.log(`Расчет для временной точки ${timeIndex}`);
@@ -45,83 +45,77 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
   const dispersedPoints = [];
   
   // Расчет направления ветра в радианах
-  const windAngle = (windDirection * Math.PI) / 180;
+  const windAngle = (safeWindDirection * Math.PI) / 180;
   
-  // Проверяем корректность угла ветра
-  if (isNaN(windAngle)) {
-    console.error('Некорректный угол ветра:', windDirection);
-    return [];
-  }
-  
-  // Расчет вектора смещения с учетом скорости ветра
-  const xOffset = Math.sin(windAngle) * windSpeed * windScaleFactor;
-  const yOffset = Math.cos(windAngle) * windSpeed * windScaleFactor;
-  
-  // Для каждого отчета генерируем точки распространения
-  limitedReports.forEach(report => {
-    // Проверяем, что координаты присутствуют и валидны
-    if (!report.latitude || !report.longitude) {
-      console.warn('Отчет без координат:', report);
-      return;
-    }
+  try {
+    // Для каждого исходного отчета
+    limitedReports.forEach(report => {
+      // Проверяем, что у отчета есть координаты
+      if (!report || !report.latitude || !report.longitude) {
+        return; // Пропускаем отчеты без координат
+      }
     
-    const lat = parseFloat(report.latitude);
-    const lng = parseFloat(report.longitude);
-    
-    if (isNaN(lat) || isNaN(lng)) {
-      console.warn('Некорректные координаты:', { lat, lng });
-      return;
-    }
-    
-    // Определяем тип аллергена и интенсивность
-    const allergenType = report.allergen || 'unknown';
-    const intensity = Math.min(Math.max(report.severity || 5, 1), 5); // Ограничиваем интенсивность от 1 до 5
-    
-    // Генерируем точки распространения с учетом ветра
-    for (let i = 0; i < pointsPerSource; i++) {
-      // Расчет коэффициента расстояния для текущей точки (0-1)
-      const distanceFactor = Math.random();
+      const lat = parseFloat(report.latitude);
+      const lng = parseFloat(report.longitude);
       
-      // Расчет смещения с учетом ветра и случайной составляющей
-      const randomAngle = Math.random() * Math.PI * 2;
-      const randomDistortX = Math.cos(randomAngle) * baseRadius * turbulenceFactor * distanceFactor;
-      const randomDistortY = Math.sin(randomAngle) * baseRadius * turbulenceFactor * distanceFactor;
-      
-      // Итоговое смещение (преимущественно по ветру, но с элементом случайности)
-      const totalXOffset = xOffset * distanceFactor + randomDistortX;
-      const totalYOffset = yOffset * distanceFactor + randomDistortY;
-      
-      // Расчет новых координат с учетом смещения
-      const latFactor = 1 / 111000;
-      const lngFactor = 1 / (111000 * Math.cos((lat * Math.PI) / 180));
-      
-      const newLat = lat + totalYOffset * latFactor;
-      const newLng = lng + totalXOffset * lngFactor;
-      
-      // Проверяем валидность новых координат
-      if (isNaN(newLat) || isNaN(newLng)) {
-        console.warn('Некорректные координаты после расчета:', { newLat, newLng });
-        continue;
+      if (isNaN(lat) || isNaN(lng)) {
+        console.warn('Некорректные координаты:', { lat, lng });
+        return;
       }
       
-      // Расчет интенсивности в зависимости от расстояния 
-      // (уменьшается с увеличением расстояния по экспоненте)
-      const intensityFactor = Math.exp(-distanceFactor * 1.5); // Уменьшаем скорость затухания
-      const newIntensity = Math.max(1, Math.floor(intensity * intensityFactor));
+      // Определяем тип аллергена и интенсивность
+      const allergenType = report.allergen || 'unknown';
+      const intensity = Math.min(Math.max(report.severity || 5, 1), 5); // Ограничиваем интенсивность от 1 до 5
       
-      // Добавляем точку в массив
-      dispersedPoints.push({
-        latitude: newLat,
-        longitude: newLng,
-        type: 'calculated',
-        severity: newIntensity,
-        allergen: allergenType,
-        parentAllergen: allergenType,
-        isCalculated: true,
-        timestamp: report.timestamp || new Date().toISOString() // Добавляем временную метку
-      });
-    }
-  });
+      // Генерируем точки распространения с учетом ветра
+      for (let i = 0; i < pointsPerSource; i++) {
+        // Расчет коэффициента расстояния для текущей точки (0-1)
+        const distanceFactor = Math.random();
+        
+        // Расчет смещения с учетом ветра и случайной составляющей
+        const randomAngle = Math.random() * Math.PI * 2;
+        const randomDistortX = Math.cos(randomAngle) * baseRadius * turbulenceFactor * distanceFactor;
+        const randomDistortY = Math.sin(randomAngle) * baseRadius * turbulenceFactor * distanceFactor;
+        
+        // Итоговое смещение (преимущественно по ветру, но с элементом случайности)
+        const totalXOffset = Math.sin(windAngle) * safeWindSpeed * windScaleFactor * distanceFactor + randomDistortX;
+        const totalYOffset = Math.cos(windAngle) * safeWindSpeed * windScaleFactor * distanceFactor + randomDistortY;
+        
+        // Расчет новых координат с учетом смещения
+        const latFactor = 1 / 111000;
+        const lngFactor = 1 / (111000 * Math.cos((lat * Math.PI) / 180));
+        
+        const newLat = lat + totalYOffset * latFactor;
+        const newLng = lng + totalXOffset * lngFactor;
+        
+        // Проверяем валидность новых координат
+        if (isNaN(newLat) || isNaN(newLng)) {
+          console.warn('Некорректные координаты после расчета:', { newLat, newLng });
+          continue;
+        }
+        
+        // Расчет интенсивности в зависимости от расстояния 
+        // (уменьшается с увеличением расстояния по экспоненте)
+        const intensityFactor = Math.exp(-distanceFactor * 1.5); // Уменьшаем скорость затухания
+        const newIntensity = Math.max(1, Math.floor(intensity * intensityFactor));
+        
+        // Добавляем точку в массив
+        dispersedPoints.push({
+          latitude: newLat,
+          longitude: newLng,
+          type: 'calculated',
+          severity: newIntensity,
+          allergen: allergenType,
+          parentAllergen: allergenType,
+          isCalculated: true,
+          timestamp: report.timestamp || new Date().toISOString() // Добавляем временную метку
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка при расчете распространения пыльцы:', error);
+    return [];
+  }
   
   console.log(`Сгенерировано ${dispersedPoints.length} точек распространения`);
   return dispersedPoints;
