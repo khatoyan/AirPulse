@@ -12,7 +12,11 @@ router.get('/current', async (req, res) => {
     const { lat, lon } = req.query;
     
     console.log('Запрос погоды для координат:', { lat, lon });
-    console.log('Используется API ключ:', config.openWeatherApiKey);
+    console.log('Используется API ключ:', config.openWeatherApiKey ? 'Установлен' : 'Не установлен');
+
+    if (!config.openWeatherApiKey) {
+      throw new Error('API ключ OpenWeather не настроен');
+    }
 
     // Получаем данные от OpenWeather API
     const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather`, {
@@ -25,12 +29,9 @@ router.get('/current', async (req, res) => {
       }
     });
 
-    console.log('Ответ от OpenWeather:', response.data);
-
-    const { main, wind } = response.data;
-    
     // Сохраняем данные в базу
-    const weatherData = await prisma.weatherData.create({
+    const { main, wind, weather } = response.data;
+    await prisma.weatherData.create({
       data: {
         temperature: main.temp,
         humidity: main.humidity,
@@ -39,7 +40,8 @@ router.get('/current', async (req, res) => {
       }
     });
 
-    res.json(weatherData);
+    // Возвращаем ответ в формате, совместимом с фронтендом
+    res.json(response.data);
   } catch (error) {
     console.error('Подробная ошибка:', error);
     if (error instanceof AxiosError && error.response) {

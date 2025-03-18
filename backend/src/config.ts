@@ -14,18 +14,21 @@ if (!process.env.JWT_SECRET) {
 
 export const config = {
   port: process.env.PORT || 3001,
-  databaseUrl: process.env.DATABASE_URL,
+  mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/airpulse',
   openWeatherApiKey: process.env.OPENWEATHER_API_KEY,
   // Используем случайную строку как запасной вариант только для разработки
-  jwtSecret: process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 
-    require('crypto').randomBytes(64).toString('hex') : 
-    (() => {
-      console.error('JWT_SECRET не определен в продакшн-режиме!');
-      process.exit(1);
-    })()),
+  jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: [
+      'http://localhost:4173',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://192.168.1.66:4173',
+      'http://192.168.1.66:3000',
+      'http://192.168.1.66:5173',
+      process.env.FRONTEND_URL
+    ].filter(Boolean),
     credentials: true
   }
 };

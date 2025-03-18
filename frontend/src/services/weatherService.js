@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { mockWeatherData } from '../utils/mockData';
+import { weatherService as backendWeatherService } from './api';
 
-// Исправляем способ получения API ключа для Vite
-const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
-const BASE_URL = 'https://api.openweathermap.org/data/2.5';
+// API_URL для запросов к бэкенду
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 // Функция для проверки, является ли объект HTML-страницей
 const isHtmlResponse = (data) => {
@@ -30,16 +30,9 @@ const isHtmlResponse = (data) => {
 const isValidWeatherData = (data) => {
   if (!data || typeof data !== 'object') return false;
   
-  // Проверка на наличие обязательных полей
-  const requiredFields = ['temp', 'humidity', 'wind_speed', 'wind_deg'];
-  const altRequiredFields = ['temperature', 'humidity', 'windSpeed', 'windDeg'];
-  
-  // Проверка по основным полям
-  const hasRequiredFields = requiredFields.every(field => data[field] !== undefined);
-  // Проверка по альтернативным именам полей
-  const hasAltRequiredFields = altRequiredFields.every(field => data[field] !== undefined);
-  
-  return hasRequiredFields || hasAltRequiredFields;
+  // Проверяем обязательные поля для объекта погоды
+  const requiredFields = ['main', 'wind', 'weather'];
+  return requiredFields.every(field => field in data);
 };
 
 // Генерация тестовых данных для прогноза на 24 часа
@@ -98,143 +91,30 @@ const generateMockForecast = () => {
 export const weatherService = {
   async getCurrentWeather(lat, lon) {
     try {
-      // Проверка наличия ключа API
-      if (!API_KEY) {
-        console.error('API ключ OpenWeather не найден. Проверьте файл .env');
-        // Возвращаем моковые данные при отсутствии ключа
-        console.log('Используем моковые данные о погоде (нет API ключа)');
+      // Используем бэкенд-сервис вместо прямого обращения к OpenWeather API
+      const data = await backendWeatherService.getCurrentWeather(lat, lon);
+      
+      if (isValidWeatherData(data)) {
+        return data;
+      } else {
+        console.error('Получены некорректные данные о погоде:', data);
+        // В случае ошибки используем моковые данные
         return mockWeatherData;
       }
-
-      const response = await axios.get(`${BASE_URL}/weather`, {
-        params: {
-          lat,
-          lon,
-          appid: API_KEY,
-          units: 'metric',
-          lang: 'ru'
-        }
-      });
-      
-      // Проверка ответа на формат HTML-страницы
-      if (isHtmlResponse(response.data)) {
-        console.error('Получен HTML-ответ вместо JSON с данными о погоде');
-        console.log('Используем моковые данные о погоде (некорректный формат ответа)');
-        return mockWeatherData;
-      }
-
-      const { main, wind } = response.data;
-      
-      const weatherData = {
-        temp: Math.round(main.temp),
-        humidity: main.humidity,
-        wind_speed: wind.speed,
-        wind_deg: wind.deg
-      };
-      
-      // Проверка данных на корректность
-      if (!isValidWeatherData(weatherData)) {
-        console.error('Получены некорректные данные о погоде:', weatherData);
-        console.log('Используем моковые данные о погоде (некорректные данные)');
-        return mockWeatherData;
-      }
-      
-      return weatherData;
     } catch (error) {
       console.error('Ошибка при получении данных о погоде:', error);
-      // Возвращаем моковые данные при ошибке
-      console.log('Используем моковые данные о погоде (ошибка запроса)');
       return mockWeatherData;
     }
   },
 
-  // Получение прогноза погоды на 24 часа
   async getForecast24h(lat, lon) {
     try {
-      // Проверка наличия ключа API
-      if (!API_KEY) {
-        console.error('API ключ OpenWeather не найден для прогноза. Используем моковые данные.');
-        return generateMockForecast();
-      }
-
-      const response = await axios.get(`${BASE_URL}/forecast`, {
-        params: {
-          lat,
-          lon,
-          appid: API_KEY,
-          units: 'metric',
-          lang: 'ru',
-          cnt: 8 // Ограничиваем получение данных до 8 точек (покрывает примерно 24 часа)
-        }
-      });
-      
-      // Проверка ответа на формат HTML-страницы
-      if (isHtmlResponse(response.data)) {
-        console.error('Получен HTML-ответ вместо JSON с прогнозом погоды');
-        return generateMockForecast();
-      }
-
-      // Проверка на правильность структуры ответа
-      if (!response.data.list || !Array.isArray(response.data.list)) {
-        console.error('Некорректная структура данных прогноза погоды');
-        return generateMockForecast();
-      }
-      
-      // Обрабатываем данные и форматируем их
-      const forecastData = response.data.list.map(item => {
-        const date = new Date(item.dt * 1000);
-        const hour = date.getHours();
-        
-        return {
-          temp: Math.round(item.main.temp),
-          humidity: item.main.humidity,
-          wind_speed: item.wind.speed,
-          wind_deg: item.wind.deg,
-          dt: item.dt,
-          timeLabel: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          hourLabel: `${hour}:00`,
-          hour: hour
-        };
-      });
-      
-      // Если в результате API-запроса получено меньше 24 точек, дополняем данными
-      if (forecastData.length < 24) {
-        // Вычисляем, сколько точек нужно добавить
-        const additionalPoints = 24 - forecastData.length;
-        const lastPoint = forecastData[forecastData.length - 1];
-        const lastDt = lastPoint ? lastPoint.dt : Math.floor(Date.now() / 1000);
-        
-        // Добавляем дополнительные точки с интервалом в 1 час
-        for (let i = 1; i <= additionalPoints; i++) {
-          const newDt = lastDt + (i * 3600); // +1 час в секундах
-          const date = new Date(newDt * 1000);
-          const hour = date.getHours();
-          
-          // Рассчитываем новые параметры на основе последней точки с небольшими вариациями
-          const tempVar = Math.random() * 2 - 1; // ±1 градус
-          const humidityVar = Math.round(Math.random() * 10 - 5); // ±5%
-          const windSpeedVar = (Math.random() * 1 - 0.5).toFixed(1); // ±0.5 м/с
-          const windDegVar = Math.round(Math.random() * 40 - 20); // ±20 градусов
-          
-          forecastData.push({
-            temp: Math.round((lastPoint ? lastPoint.temp : 20) + tempVar),
-            humidity: Math.min(100, Math.max(0, (lastPoint ? lastPoint.humidity : 70) + humidityVar)),
-            wind_speed: Math.max(0, (lastPoint ? lastPoint.wind_speed : 3) + parseFloat(windSpeedVar)),
-            wind_deg: (((lastPoint ? lastPoint.wind_deg : 180) + windDegVar) % 360 + 360) % 360,
-            dt: newDt,
-            timeLabel: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            hourLabel: `${hour}:00`,
-            hour: hour
-          });
-        }
-      }
-      
-      // Возвращаем 24 точки прогноза
-      return forecastData.slice(0, 24);
+      // Используем бэкенд-сервис вместо прямого обращения к OpenWeather API
+      return await backendWeatherService.getHourlyForecast(lat, lon);
     } catch (error) {
       console.error('Ошибка при получении прогноза погоды:', error);
-      // Генерируем моковые данные при ошибке
-      return generateMockForecast();
+      // В случае ошибки генерируем моковые данные
+      return this.generateMockForecast();
     }
   },
 
