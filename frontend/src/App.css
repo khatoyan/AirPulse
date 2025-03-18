@@ -78,7 +78,99 @@
 }
 
 body {
-  font-family: 'Roboto', sans-serif;
+  margin: 0;
+  padding: 0;
+  font-family: 'Roboto', 'Segoe UI', 'Arial', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Базовый контейнер приложения */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Основное содержимое между шапкой и подвалом */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Для предотвращения дергания при прокрутке на мобильных */
+html, body {
+  overscroll-behavior-y: none;
+}
+
+/* Адаптивная верстка для мобильных устройств */
+@media (max-width: 600px) {
+  /* Уменьшаем размер текста для мобильных */
+  body {
+    font-size: 14px;
+  }
+  
+  /* Уменьшаем отступы для элементов управления Leaflet */
+  .leaflet-control-container .leaflet-top,
+  .leaflet-control-container .leaflet-bottom {
+    padding: 5px;
+  }
+  
+  /* Уменьшаем размер кнопок управления картой */
+  .leaflet-control-zoom a {
+    width: 30px !important;
+    height: 30px !important;
+    line-height: 30px !important;
+  }
+  
+  /* Уменьшаем размер попапов на карте */
+  .leaflet-popup-content {
+    margin: 10px;
+    max-width: 250px;
+  }
+  
+  /* Увеличиваем размер сенсорных целей для лучшей доступности */
+  button, 
+  [role="button"],
+  .MuiButtonBase-root {
+    min-height: 36px;
+    min-width: 36px;
+  }
+  
+  /* Нижний отступ для контента, чтобы избежать перекрытия плавающими панелями */
+  .main-content {
+    padding-bottom: 70px;
+  }
+}
+
+/* Стили для планшетов */
+@media (min-width: 601px) and (max-width: 960px) {
+  /* Средние размеры для планшетов */
+  .leaflet-popup-content {
+    max-width: 300px;
+  }
+}
+
+/* Более высокие разрешения */
+@media (min-width: 1280px) {
+  /* Дополнительное пространство для больших экранов */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+
+/* Стили для ландшафтной ориентации на мобильных */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Специальные настройки для альбомной ориентации */
+  .leaflet-control-container .leaflet-top {
+    top: 5px;
+  }
+  
+  /* Уменьшаем высоту элементов меню */
+  .MuiAppBar-root {
+    min-height: 48px;
+  }
 }

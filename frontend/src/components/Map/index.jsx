@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import { useMapStore } from '../../stores/mapStore';
-import { Box, Paper, Typography, Divider, Tooltip, CircularProgress, ButtonGroup, Button, Stack, IconButton } from '@mui/material';
+import { Box, Paper, Typography, Divider, Tooltip, CircularProgress, ButtonGroup, Button, Stack, IconButton, useMediaQuery, useTheme } from '@mui/material';
 import ReportForm from '../ReportForm';
 import './Map.css';
 import { weatherService } from '../../services/api';
@@ -52,6 +52,7 @@ const ICONS = {
 const AllergenSelector = () => {
   const { allergenTypes, selectedAllergen, setSelectedAllergen } = useMapStore();
   const [isMobile, setIsMobile] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   
   // Проверяем размер экрана при монтировании и при изменении размера окна
   useEffect(() => {
@@ -70,6 +71,43 @@ const AllergenSelector = () => {
     e.stopPropagation();
   };
   
+  // Переключатель для мобильного вида
+  const toggleExpanded = (e) => {
+    e.stopPropagation();
+    setExpanded(!expanded);
+  };
+
+  // На мобильных устройствах делаем компактную кнопку, которая раскрывает панель аллергенов
+  if (isMobile && !expanded) {
+    return (
+      <Paper
+        elevation={3}
+        onClick={handleContainerClick}
+        sx={{
+          position: 'absolute',
+          bottom: '10px',
+          right: '10px',
+          zIndex: 999,
+          py: 1,
+          px: 2,
+          borderRadius: '24px',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          boxShadow: '0 2px 8px rgba(0, 120, 200, 0.3)'
+        }}
+      >
+        <Button
+          onClick={toggleExpanded}
+          variant="text"
+          color="primary"
+          startIcon={<AirIcon />}
+          sx={{ textTransform: 'none', fontWeight: 600 }}
+        >
+          Фильтры
+        </Button>
+      </Paper>
+    );
+  }
+  
   return (
     <Paper 
       elevation={3}
@@ -77,9 +115,10 @@ const AllergenSelector = () => {
       sx={{
         position: 'absolute',
         top: 'auto',
-        bottom: '10px',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        bottom: isMobile ? '70px' : '10px',
+        left: isMobile ? '10px' : '50%',
+        right: isMobile ? '10px' : 'auto',
+        transform: isMobile ? 'none' : 'translateX(-50%)',
         zIndex: 999,
         py: 1,
         px: 0.5,
@@ -91,6 +130,17 @@ const AllergenSelector = () => {
         boxShadow: '0 2px 8px rgba(0, 120, 200, 0.2)'
       }}
     >
+      {isMobile && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, mb: 1 }}>
+          <Typography variant="subtitle2" fontWeight="600" color="primary">
+            Типы аллергенов
+          </Typography>
+          <IconButton size="small" onClick={toggleExpanded} color="primary">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
+
       <Stack 
         direction={isMobile ? 'column' : 'row'} 
         spacing={1}
@@ -112,7 +162,7 @@ const AllergenSelector = () => {
               borderRadius: '6px',
               py: 0.5,
               px: 2,
-              minWidth: isMobile ? '120px' : 'auto',
+              minWidth: isMobile ? '100%' : 'auto',
               color: selectedAllergen === allergen.id ? '#fff' : '#1976d2',
               borderColor: '#1976d2',
               backgroundColor: selectedAllergen === allergen.id ? '#1976d2' : 'transparent',
@@ -122,7 +172,8 @@ const AllergenSelector = () => {
               },
               m: 0.5,
               textTransform: 'none',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.2s ease',
+              justifyContent: 'flex-start'
             }}
           >
             <Typography variant="body2" fontWeight={selectedAllergen === allergen.id ? 600 : 400}>
@@ -410,10 +461,33 @@ const WeatherDataLoader = () => {
   ) : null;
 };
 
+// Функция для получения текстового представления направления ветра
+const getWindDirectionText = (degrees) => {
+  if (degrees === undefined || degrees === null) {
+    return 'Н/Д';
+  }
+  const directions = ['С', 'ССВ', 'СВ', 'ВСВ', 'В', 'ВЮВ', 'ЮВ', 'ЮЮВ', 'Ю', 'ЮЮЗ', 'ЮЗ', 'ЗЮЗ', 'З', 'ЗСЗ', 'СЗ', 'ССЗ'];
+  const index = Math.round(degrees / 22.5) % 16;
+  return directions[index];
+};
+
 // Компонент для отображения погодной информации и объяснения ее влияния на рассеивание пыльцы
 const WeatherInfoPanel = () => {
   const { weatherData } = useMapStore();
   const [expanded, setExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Проверяем размер экрана при монтировании и при изменении размера окна
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   if (!weatherData) return null;
   
@@ -517,12 +591,13 @@ const WeatherInfoPanel = () => {
       onClick={handlePanelClick}
       sx={{
         position: 'absolute',
-        top: '90px', // Увеличиваем отступ сверху
+        top: isMobile ? 'auto' : '90px',
         right: '10px',
+        bottom: isMobile ? '70px' : 'auto',
         zIndex: 1700,
         padding: 2,
-        width: expanded ? 320 : 'auto',
-        minWidth: 180,
+        width: expanded ? (isMobile ? '94%' : '320px') : 'auto',
+        minWidth: isMobile ? 'auto' : '180px',
         transition: 'width 0.3s ease',
         maxWidth: '90%',
         borderRadius: 2,
@@ -545,7 +620,7 @@ const WeatherInfoPanel = () => {
             border: expanded ? '1px solid rgba(25, 118, 210, 0.5)' : 'none'
           }}
         >
-          <InfoIcon fontSize="small" />
+          {expanded ? <CloseIcon fontSize="small" /> : <InfoIcon fontSize="small" />}
         </IconButton>
       </Box>
       
@@ -564,51 +639,71 @@ const WeatherInfoPanel = () => {
         <Box sx={{ mt: 1 }}>
           <Divider sx={{ mb: 1 }} />
           
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <ThermostatIcon fontSize="small" sx={{ mr: 1, color: tempImpact.color }} />
-            <Box>
-              <Typography variant="body2" component="span" fontWeight="medium">
-                Температура: {weatherData.temperature ? `${weatherData.temperature}°C` : 'Н/Д'}
-              </Typography>
-              <Typography variant="body2" component="div" color={tempImpact.color}>
-                {tempImpact.icon} {tempImpact.text}
+          {/* Подробная информация о погоде */}
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <ThermostatIcon color="primary" sx={{ mr: 1, fontSize: '1.2rem' }} />
+              <Typography variant="body2" fontWeight="bold">
+                Температура: {weatherData.temperature ? `${weatherData.temperature}°C` : 'Нет данных'}
               </Typography>
             </Box>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <WaterIcon fontSize="small" sx={{ mr: 1, color: humidityImpact.color }} />
-            <Box>
-              <Typography variant="body2" component="span" fontWeight="medium">
-                Влажность: {weatherData.humidity ? `${weatherData.humidity}%` : 'Н/Д'}
-              </Typography>
-              <Typography variant="body2" component="div" color={humidityImpact.color}>
-                {humidityImpact.icon} {humidityImpact.text}
-              </Typography>
-            </Box>
-          </Box>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <AirIcon fontSize="small" sx={{ mr: 1, color: windImpact.color }} />
-            <Box>
-              <Typography variant="body2" component="span" fontWeight="medium">
-                Ветер: {weatherData.windSpeed ? `${weatherData.windSpeed} м/с` : 'Н/Д'}, 
-                {weatherData.windDeg ? ` ${weatherData.windDeg}°` : ' Н/Д'}
-              </Typography>
-              <Typography variant="body2" component="div" color={windImpact.color}>
-                {windImpact.icon} {windImpact.text}
-              </Typography>
-            </Box>
-          </Box>
-          
-          <Divider sx={{ my: 1 }} />
-          
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <HelpOutlineIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-            <Typography variant="caption" color="text.secondary">
-              Используем модель Гауссовского рассеивания с учетом погодных факторов
+            <Typography 
+              variant="body2" 
+              color={tempImpact.color}
+              sx={{ pl: 4, lineHeight: 1.3 }}
+            >
+              {tempImpact.icon} {tempImpact.text}
             </Typography>
           </Box>
+          
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <WaterIcon color="primary" sx={{ mr: 1, fontSize: '1.2rem' }} />
+              <Typography variant="body2" fontWeight="bold">
+                Влажность: {weatherData.humidity ? `${weatherData.humidity}%` : 'Нет данных'}
+              </Typography>
+            </Box>
+            <Typography 
+              variant="body2" 
+              color={humidityImpact.color}
+              sx={{ pl: 4, lineHeight: 1.3 }}
+            >
+              {humidityImpact.icon} {humidityImpact.text}
+            </Typography>
+          </Box>
+          
+          <Box sx={{ mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <AirIcon color="primary" sx={{ mr: 1, fontSize: '1.2rem' }} />
+              <Typography variant="body2" fontWeight="bold">
+                Ветер: {weatherData.windSpeed ? `${weatherData.windSpeed} м/с` : 'Нет данных'}
+                {weatherData.windDeg ? `, ${getWindDirectionText(weatherData.windDeg)}` : ''}
+              </Typography>
+            </Box>
+            <Typography 
+              variant="body2" 
+              color={windImpact.color}
+              sx={{ pl: 4, lineHeight: 1.3 }}
+            >
+              {windImpact.icon} {windImpact.text}
+            </Typography>
+          </Box>
+          
+          <Tooltip title="Информация о влиянии погоды на распространение пыльцы">
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              justifyContent: 'center',
+              mt: 1.5,
+              pt: 1.5,
+              borderTop: '1px dashed rgba(0, 0, 0, 0.1)'
+            }}>
+              <HelpOutlineIcon fontSize="small" color="action" sx={{ mr: 1 }} />
+              <Typography variant="caption" color="text.secondary">
+                Показано влияние погоды на распространение пыльцы
+              </Typography>
+            </Box>
+          </Tooltip>
         </Box>
       )}
     </Paper>
@@ -867,48 +962,20 @@ const debounce = (func, wait) => {
 
 // Модифицируем основной компонент карты
 function Map() {
-  const { showReportForm, selectedLocation, setReports, setUserLocation, toggleReportForm } = useMapStore();
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Добавляем инициализацию состояния для местоположения пользователя
-  useEffect(() => {
-    // Дополняем хранилище начальными данными о местоположении пользователя
-    useMapStore.setState({ 
-      userLocation: null
-    });
-  }, []);
-  
-  // Симулируем начальную загрузку карты
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
-    
-    return () => clearTimeout(timer);
-  }, []);
-  
-  if (isLoading) {
-    return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          height: '70vh', 
-          width: '100%',
-          flexDirection: 'column'
-        }}
-      >
-        <CircularProgress size={60} />
-        <Typography variant="h6" sx={{ mt: 2 }}>
-          Загрузка карты AirPulse...
-        </Typography>
-      </Box>
-    );
-  }
+  const { 
+    toggleReportForm, 
+    showReportForm, 
+    selectedLocation, 
+    setSelectedLocation, 
+    allergenTypes, 
+    setSelectedAllergen,
+    addReport
+  } = useMapStore();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   return (
-    <Box sx={{ position: 'relative', height: '90vh', width: '100%' }}>
+    <Box sx={{ position: 'relative', height: isMobile ? 'calc(100vh - 56px)' : '90vh', width: '100%' }}>
       <MapContainer
         center={[55.0084, 82.9357]} // Новосибирск как начальный центр
         zoom={11}

@@ -9,7 +9,9 @@ import {
   Switch,
   FormControlLabel,
   Tooltip,
-  Button
+  Button,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -17,6 +19,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import CloseIcon from '@mui/icons-material/Close';
 import { useMapStore } from '../../stores/mapStore';
 
 const TimeSlider = () => {
@@ -29,9 +32,11 @@ const TimeSlider = () => {
     loadForecast 
   } = useMapStore();
   
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [isPlaying, setIsPlaying] = useState(false);
   const [autoplaySpeed, setAutoplaySpeed] = useState(1500); // 1.5 секунды на кадр
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(!isMobile); // На мобильных по умолчанию свернуто
   
   // Отладочный вывод данных прогноза
   useEffect(() => {
@@ -73,6 +78,11 @@ const TimeSlider = () => {
       loadForecast(coords.lat, coords.lng);
     }
   }, [timelineActive, forecastData, loadForecast]);
+
+  // Реагируем на изменение размера экрана
+  useEffect(() => {
+    setExpanded(!isMobile);
+  }, [isMobile]);
   
   // Обработчик изменения значения слайдера
   const handleSliderChange = (event, newValue) => {
@@ -115,7 +125,10 @@ const TimeSlider = () => {
   const currentTimeData = forecastData[selectedTimeIndex] || {};
   
   // Форматируем метки времени для слайдера
-  const timeMarks = forecastData.filter((_, index) => index % 4 === 0).map(item => ({
+  const timeMarks = forecastData.filter((_, index) => {
+    // На мобильных показываем меньше меток
+    return isMobile ? index % 8 === 0 : index % 4 === 0;
+  }).map(item => ({
     value: forecastData.indexOf(item),
     label: item.hourLabel
   }));
@@ -126,7 +139,7 @@ const TimeSlider = () => {
       <Box 
         sx={{ 
           position: 'absolute', 
-          bottom: '70px', 
+          bottom: isMobile ? '130px' : '70px', 
           right: '10px', 
           zIndex: 1000 
         }}
@@ -137,9 +150,12 @@ const TimeSlider = () => {
           color="primary"
           onClick={handleToggleTimeline}
           startIcon={<AccessTimeIcon />}
-          sx={{ borderRadius: '20px' }}
+          sx={{ 
+            borderRadius: '20px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+          }}
         >
-          Прогноз
+          {isMobile ? 'Прогноз' : 'Прогноз на 24ч'}
         </Button>
       </Box>
     );
@@ -154,9 +170,10 @@ const TimeSlider = () => {
         onClick={handleContainerClick}
         sx={{
           position: 'absolute',
-          top: '90px', // Увеличиваем отступ сверху
-          left: '10px',
-          padding: '12px',
+          top: isMobile ? 'auto' : '90px',
+          left: isMobile ? '10px' : '10px',
+          bottom: isMobile ? '130px' : 'auto',
+          padding: '8px 12px',
           zIndex: 1600,
           backgroundColor: 'white',
           borderRadius: '8px',
@@ -171,6 +188,7 @@ const TimeSlider = () => {
           <Button 
             variant="contained" 
             color="primary"
+            size={isMobile ? "small" : "medium"}
             onClick={timelineActive ? toggleExpanded : handleToggleTimeline}
             startIcon={<AccessTimeIcon />}
             endIcon={timelineActive ? <ExpandMoreIcon /> : null}
@@ -178,12 +196,12 @@ const TimeSlider = () => {
               textTransform: 'none',
               boxShadow: '0 2px 6px rgba(0, 0, 0, 0.4)',
               fontWeight: 'bold',
-              fontSize: '1rem',
-              py: 1,
-              px: 2
+              fontSize: isMobile ? '0.8rem' : '1rem',
+              py: isMobile ? 0.5 : 1,
+              px: isMobile ? 1 : 2
             }}
           >
-            Прогноз 24ч
+            {isMobile ? 'Прогноз' : 'Прогноз 24ч'}
           </Button>
         </Tooltip>
         
@@ -192,31 +210,33 @@ const TimeSlider = () => {
             <IconButton 
               color={isPlaying ? "secondary" : "primary"} 
               onClick={togglePlay}
+              size={isMobile ? "small" : "medium"}
               sx={{ 
                 ml: 1,
                 boxShadow: isPlaying ? '0 0 8px rgba(255, 0, 150, 0.7)' : 'none',
-                width: 44,
-                height: 44,
+                width: isMobile ? 36 : 44,
+                height: isMobile ? 36 : 44,
                 border: '2px solid',
                 borderColor: isPlaying ? 'secondary.main' : 'primary.main'
               }}
             >
-              {isPlaying ? <PauseIcon fontSize="medium" /> : <PlayArrowIcon fontSize="medium" />}
+              {isPlaying ? <PauseIcon fontSize={isMobile ? "small" : "medium"} /> : <PlayArrowIcon fontSize={isMobile ? "small" : "medium"} />}
             </IconButton>
             
             <IconButton
               color="primary"
               onClick={handleResetTimeline}
+              size={isMobile ? "small" : "medium"}
               sx={{
                 ml: 1,
-                width: 44,
-                height: 44,
+                width: isMobile ? 36 : 44,
+                height: isMobile ? 36 : 44,
                 border: '2px solid',
                 borderColor: 'primary.main'
               }}
               title="Сбросить таймлайн"
             >
-              <RestartAltIcon fontSize="medium" />
+              <RestartAltIcon fontSize={isMobile ? "small" : "medium"} />
             </IconButton>
           </>
         )}
@@ -232,12 +252,12 @@ const TimeSlider = () => {
       onClick={handleContainerClick}
       sx={{
         position: 'absolute',
-        bottom: '100px',
+        bottom: isMobile ? '70px' : '100px',
         left: '50%',
         transform: 'translateX(-50%)',
-        width: { xs: '95%', sm: '85%', md: '75%', lg: '65%' },
+        width: { xs: '95%', sm: '90%', md: '80%', lg: '65%' },
         maxWidth: '800px',
-        padding: 2,
+        padding: isMobile ? 1.5 : 2,
         zIndex: 1600,
         backgroundColor: 'white',
         borderRadius: '8px',
@@ -246,87 +266,119 @@ const TimeSlider = () => {
         border: '3px solid #1976d2'
       }}
     >
-      <Stack spacing={2}>
+      <Stack spacing={isMobile ? 1 : 2}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="subtitle1" fontWeight="bold" color="primary">
-            <AccessTimeIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-            Прогноз распространения пыльцы на 24 часа
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AccessTimeIcon color="primary" sx={{ mr: 1 }} />
+            <Typography variant={isMobile ? "subtitle2" : "subtitle1"} fontWeight="bold" color="primary">
+              Прогноз на 24 часа
+            </Typography>
+          </Box>
           
           <Box>
+            <Tooltip title="Свернуть таймлайн">
+              <IconButton 
+                onClick={toggleExpanded} 
+                color="primary"
+                size="small"
+              >
+                <ExpandLessIcon />
+              </IconButton>
+            </Tooltip>
+            
+            <Tooltip title="Отключить прогноз">
+              <IconButton 
+                onClick={handleToggleTimeline} 
+                color="error"
+                size="small"
+              >
+                <CloseIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Stack>
+        
+        <Box>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
             <IconButton 
               color={isPlaying ? "secondary" : "primary"} 
               onClick={togglePlay}
+              size={isMobile ? "small" : "medium"}
               sx={{ 
-                mr: 1,
-                boxShadow: isPlaying ? '0 0 6px rgba(255, 0, 150, 0.5)' : 'none'
+                boxShadow: isPlaying ? '0 0 8px rgba(255, 0, 150, 0.7)' : 'none',
+                border: '2px solid',
+                borderColor: isPlaying ? 'secondary.main' : 'primary.main',
+                p: isMobile ? 0.5 : 1
               }}
             >
               {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
             </IconButton>
             
+            <Typography variant={isMobile ? "body2" : "body1"} sx={{ flexGrow: 1, textAlign: 'center', fontWeight: 'bold' }}>
+              {currentTimeData.fullLabel || 'Загрузка данных...'}
+            </Typography>
+            
             <IconButton
               color="primary"
               onClick={handleResetTimeline}
-              sx={{ mr: 1 }}
-              title="Сбросить таймлайн"
+              size={isMobile ? "small" : "medium"}
+              sx={{
+                border: '2px solid',
+                borderColor: 'primary.main',
+                p: isMobile ? 0.5 : 1
+              }}
             >
               <RestartAltIcon />
             </IconButton>
-            
-            <IconButton 
-              size="small" 
-              onClick={toggleExpanded}
-              sx={{ border: '1px solid rgba(0, 0, 0, 0.1)' }}
-            >
-              <ExpandLessIcon />
-            </IconButton>
-          </Box>
-        </Stack>
-        
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Typography 
-            variant="body2" 
-            color="text.secondary" 
-            sx={{ minWidth: '60px', fontWeight: 'bold' }}
-          >
-            {currentTimeData.timeLabel || '00:00'}
-          </Typography>
+          </Stack>
           
           <Slider
             value={selectedTimeIndex}
-            min={0}
-            max={forecastData.length - 1}
+            onChange={handleSliderChange}
             step={1}
             marks={timeMarks}
-            onChange={handleSliderChange}
-            aria-labelledby="time-slider"
+            min={0}
+            max={forecastData.length - 1}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(value) => {
+              const item = forecastData[value];
+              return item ? item.hourLabel : '';
+            }}
             sx={{
               '& .MuiSlider-markLabel': {
-                fontSize: '0.75rem'
-              },
-              '& .MuiSlider-thumb': {
-                width: 16,
-                height: 16,
-                backgroundColor: '#1976d2'
-              },
-              '& .MuiSlider-track': {
-                backgroundColor: '#1976d2'
+                fontSize: isMobile ? '0.6rem' : '0.75rem'
               }
             }}
           />
-        </Stack>
+        </Box>
         
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            <strong>Текущие условия:</strong> {currentTimeData.temp}°C, влажность {currentTimeData.humidity}%, 
-            ветер {currentTimeData.wind_speed} м/с ({currentTimeData.wind_deg}°)
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant={isMobile ? "caption" : "body2"} color="text.secondary">
+            {forecastData[0]?.fullLabel || ''}
           </Typography>
-          
-          <Typography variant="caption" fontWeight="bold" color="primary.main">
-            Нажимайте Play для автовоспроизведения
+          <Typography variant={isMobile ? "caption" : "body2"} color="text.secondary">
+            {forecastData[forecastData.length - 1]?.fullLabel || ''}
           </Typography>
         </Box>
+        
+        {!isMobile && (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch 
+                  checked={timelineActive} 
+                  onChange={handleToggleTimeline} 
+                  color="primary" 
+                />
+              }
+              label={
+                <Typography variant="body2" color="text.secondary">
+                  Режим прогноза активен
+                </Typography>
+              }
+            />
+          </Box>
+        )}
       </Stack>
     </Paper>
   );
