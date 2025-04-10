@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 export const useWeatherData = () => {
   const [weatherData, setWeatherData] = useState({
@@ -15,19 +16,20 @@ export const useWeatherData = () => {
         // Координаты центра Новосибирска
         const lat = 55.0084;
         const lon = 82.9357;
-        const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-        // Получаем данные о погоде
-        const weatherResponse = await fetch(
-          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
-        );
-        const weatherResult = await weatherResponse.json();
+        // Получаем данные о погоде через наш бэкенд
+        const weatherResponse = await axios.get(`${API_URL}/weather/current`, {
+          params: { lat, lon }
+        });
 
-        // Получаем данные о качестве воздуха
-        const airQualityResponse = await fetch(
-          `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`
-        );
-        const airQualityResult = await airQualityResponse.json();
+        // Получаем данные о качестве воздуха через наш бэкенд
+        const airQualityResponse = await axios.get(`${API_URL}/weather/air-quality`, {
+          params: { lat, lon }
+        });
+
+        const weatherResult = weatherResponse.data;
+        const airQualityResult = airQualityResponse.data;
 
         setWeatherData({
           temperature: Math.round(weatherResult.main.temp),

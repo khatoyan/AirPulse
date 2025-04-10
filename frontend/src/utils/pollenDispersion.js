@@ -4,7 +4,104 @@
 // - Sofiev et al. (2013) A numerical model of birch pollen emission and dispersion in the atmosphere
 // - Siljamo et al. (2008) A numerical model of birch pollen emission and dispersion in the atmosphere
 // - Helbig et al. (2004) Numerical modelling of pollen dispersion on the regional scale
-export const calculatePollenDispersion = (reports, windSpeed, windDirection, timeIndex = null) => {
+
+// Данные о периодах цветения основных аллергенных растений (месяцы начала и конца цветения)
+// Источник: Календарь цветения аллергенных растений
+const FLOWERING_PERIODS = {
+  'береза': { start: 4, end: 5 },    // Апрель-Май
+  'ольха': { start: 3, end: 4 },     // Март-Апрель
+  'дуб': { start: 4, end: 6 },       // Апрель-Июнь
+  'тополь': { start: 3, end: 5 },    // Март-Май
+  'ива': { start: 3, end: 5 },       // Март-Май
+  'орешник': { start: 2, end: 4 },   // Февраль-Апрель
+  'ясень': { start: 4, end: 5 },     // Апрель-Май
+  'клен': { start: 4, end: 5 },      // Апрель-Май
+  'вяз': { start: 3, end: 5 },       // Март-Май
+  'амброзия': { start: 7, end: 10 }, // Июль-Октябрь
+  'полынь': { start: 7, end: 9 },    // Июль-Сентябрь
+  'лебеда': { start: 6, end: 9 },    // Июнь-Сентябрь
+  'крапива': { start: 6, end: 9 },   // Июнь-Сентябрь
+  'подорожник': { start: 5, end: 9 }, // Май-Сентябрь
+  'злаковые': { start: 5, end: 9 },  // Май-Сентябрь
+  'тимофеевка': { start: 6, end: 8 }, // Июнь-Август
+  'овсяница': { start: 5, end: 8 },  // Май-Август
+  'райграс': { start: 5, end: 9 },   // Май-Сентябрь
+  'мятлик': { start: 5, end: 8 },    // Май-Август
+  // Добавьте другие растения при необходимости
+};
+
+// Функция проверки, находится ли растение в периоде цветения
+const isPlantFlowering = (plantType, currentDate = new Date()) => {
+  // Если тип растения не указан или не найден в базе данных периодов цветения, 
+  // предполагаем, что это не растение или неизвестный тип (возвращаем true для безопасности)
+  if (!plantType || typeof plantType !== 'string') return true;
+  
+  // Нормализуем имя растения (убираем пробелы, приводим к нижнему регистру)
+  const normalizedPlantType = plantType.trim().toLowerCase();
+  
+  // Для симптомов и других типов отчетов (не растения) всегда возвращаем true
+  if (normalizedPlantType === 'unknown' || 
+      normalizedPlantType === 'симптом' || 
+      normalizedPlantType === 'symptom') {
+    return true;
+  }
+  
+  // Ищем соответствие в базе данных периодов цветения
+  let period = null;
+  
+  // Проходим по всем известным растениям и ищем частичное совпадение
+  for (const [plant, flowPeriod] of Object.entries(FLOWERING_PERIODS)) {
+    if (normalizedPlantType.includes(plant) || plant.includes(normalizedPlantType)) {
+      period = flowPeriod;
+      break;
+    }
+  }
+  
+  // Если период не найден, предполагаем, что растение может цвести (возвращаем true для безопасности)
+  if (!period) return true;
+  
+  // Получаем текущий месяц (1-12)
+  const currentMonth = currentDate.getMonth() + 1;
+  
+  // Проверяем, находится ли текущий месяц в периоде цветения
+  if (period.start <= period.end) {
+    // Обычный период (например, Апрель-Июнь)
+    return currentMonth >= period.start && currentMonth <= period.end;
+  } else {
+    // Период, переходящий через конец года (например, Ноябрь-Февраль)
+    return currentMonth >= period.start || currentMonth <= period.end;
+  }
+};
+
+// Функции расчета коэффициентов влияния погодных факторов
+const getTemperatureCoefficient = (temperature) => {
+  if (temperature === undefined || temperature === null) return 1.0;
+  
+  if (temperature < 5) return 0.6;  // снижение при низких температурах
+  if (temperature > 35) return 0.7; // снижение при высоких температурах
+  if (temperature >= 20 && temperature <= 25) return 1.4; // усиление при оптимальной температуре
+  return 1.0; // нейтральное влияние
+};
+
+const getHumidityCoefficient = (humidity) => {
+  if (humidity === undefined || humidity === null) return 1.0;
+  
+  if (humidity > 80) return 0.5; // значительное снижение при высокой влажности
+  if (humidity < 30) return 1.3; // усиление при низкой влажности
+  if (humidity >= 40 && humidity <= 60) return 1.2; // умеренное усиление при оптимальной влажности
+  return 1.0; // нейтральное влияние
+};
+
+const getRainCoefficient = (precipitation) => {
+  if (precipitation === undefined || precipitation === null) return 1.0;
+  
+  if (precipitation > 5) return 0.4; // сильное снижение при дожде
+  if (precipitation > 0 && precipitation <= 5) return 0.7; // умеренное снижение при небольшом дожде
+  return 1.0; // без осадков - нейтральное влияние
+};
+
+// Основная функция расчета распространения пыльцы
+export const calculatePollenDispersion = (reports, windSpeed, windDirection, timeIndex = null, weatherData = {}) => {
   // Проверка входных параметров
   if (!reports || !Array.isArray(reports) || reports.length === 0) {
     console.warn('Нет отчетов для расчета распространения пыльцы');
@@ -47,6 +144,19 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
   // Расчет направления ветра в радианах
   const windAngle = (safeWindDirection * Math.PI) / 180;
   
+  // Получаем погодные коэффициенты
+  const temperatureCoeff = getTemperatureCoefficient(weatherData.temperature);
+  const humidityCoeff = getHumidityCoefficient(weatherData.humidity);
+  const rainCoeff = getRainCoefficient(weatherData.precipitation);
+  
+  // Общий погодный коэффициент
+  const weatherCoefficient = temperatureCoeff * humidityCoeff * rainCoeff;
+  
+  console.log(`Погодные коэффициенты: температура=${temperatureCoeff}, влажность=${humidityCoeff}, осадки=${rainCoeff}, итоговый=${weatherCoefficient}`);
+  
+  // Получаем текущую дату для проверки периода цветения
+  const currentDate = new Date();
+  
   try {
     // Для каждого исходного отчета
     limitedReports.forEach(report => {
@@ -64,8 +174,15 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
       }
       
       // Определяем тип аллергена и интенсивность
-      const allergenType = report.allergen || 'unknown';
+      const allergenType = report.allergen || report.plantType || 'unknown';
       const intensity = Math.min(Math.max(report.severity || 5, 1), 5); // Ограничиваем интенсивность от 1 до 5
+      
+      // ВАЖНО: Проверяем, находится ли растение в периоде цветения
+      // Если это растение и оно не цветет сейчас - не генерируем точки распространения
+      if (report.type === 'plant' && !isPlantFlowering(allergenType, currentDate)) {
+        console.log(`Растение ${allergenType} не цветет в текущем месяце, пропускаем расчет распространения`);
+        return;
+      }
       
       // Генерируем точки распространения с учетом ветра
       for (let i = 0; i < pointsPerSource; i++) {
@@ -94,10 +211,12 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
           continue;
         }
         
-        // Расчет интенсивности в зависимости от расстояния 
+        // Расчет интенсивности в зависимости от расстояния и погодных условий
         // (уменьшается с увеличением расстояния по экспоненте)
         const intensityFactor = Math.exp(-distanceFactor * 1.5); // Уменьшаем скорость затухания
-        const newIntensity = Math.max(1, Math.floor(intensity * intensityFactor));
+        
+        // Применяем погодные коэффициенты к расчету интенсивности
+        const newIntensity = Math.max(1, Math.floor(intensity * intensityFactor * weatherCoefficient));
         
         // Добавляем точку в массив
         dispersedPoints.push({
@@ -108,7 +227,20 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
           allergen: allergenType,
           parentAllergen: allergenType,
           isCalculated: true,
-          timestamp: report.timestamp || new Date().toISOString() // Добавляем временную метку
+          timestamp: report.timestamp || new Date().toISOString(), // Добавляем временную метку
+          weatherFactors: {
+            temperature: weatherData.temperature,
+            humidity: weatherData.humidity,
+            precipitation: weatherData.precipitation,
+            windSpeed: safeWindSpeed,
+            windDirection: safeWindDirection,
+            coefficients: {
+              temperature: temperatureCoeff,
+              humidity: humidityCoeff,
+              rain: rainCoeff,
+              total: weatherCoefficient
+            }
+          }
         });
       }
     });

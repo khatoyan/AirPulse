@@ -7,6 +7,7 @@ const CENTER_LAT = 55.0084;
 const CENTER_LNG = 82.9357;
 
 // Функция для генерации случайных точек рассеивания вокруг центра
+/* 
 export const generateMockDispersionPoints = (count = 30) => {
   const points = [];
   
@@ -33,6 +34,7 @@ export const generateMockDispersionPoints = (count = 30) => {
   
   return points;
 };
+*/
 
 // Моковые данные о погоде
 export const mockWeatherData = {
@@ -46,6 +48,7 @@ export const mockWeatherData = {
 };
 
 // Моковые отчеты о симптомах и растениях
+/* 
 export const mockReports = [
   {
     id: 'mock-1',
@@ -78,3 +81,4 @@ export const mockReports = [
     description: 'Симптомы появляются ближе к вечеру'
   }
 ]; 
+*/ 

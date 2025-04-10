@@ -61,10 +61,19 @@ function MainApp() {
       console.log('Применяем модель гауссовского распределения с учетом ветра:', weatherData);
       
       // Рассчитываем распространение пыльцы с учетом ветра по математической модели
+      // и передаем полные данные о погоде
       const dispersedReports = calculatePollenDispersion(
         approvedReports,
         weatherData.windSpeed,
-        weatherData.windDirection
+        weatherData.windDirection,
+        null, // timeIndex не используется для текущих данных
+        {
+          temperature: weatherData.temperature,
+          humidity: weatherData.humidity,
+          precipitation: weatherData.precipitation || 0,
+          pressure: weatherData.pressure,
+          description: weatherData.description
+        }
       );
       
       console.log(`Сгенерировано ${dispersedReports.length} рассчетных точек распространения пыльцы`);

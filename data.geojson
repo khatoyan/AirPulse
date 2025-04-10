@@ -1,0 +1,117 @@
+
+{
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 1",
+          "description": "Рандомная локация в центре города"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.9346, 55.0415]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 2",
+          "description": "Район Академгородка"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [83.0912, 54.8472]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 3",
+          "description": "Правый берег"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.9078, 55.0275]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 4",
+          "description": "Район площади Ленина"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.9187, 55.0307]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 5",
+          "description": "Микрорайон Горский"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.8975, 54.9835]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 6",
+          "description": "Парк культуры и отдыха"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.9653, 55.0521]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 7",
+          "description": "Метро Студенческая"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.9123, 54.9889]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 8",
+          "description": "Заельцовский парк"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.8934, 55.0591]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 9",
+          "description": "ТЦ Аура"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.9401, 55.0287]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "name": "Точка 10",
+          "description": "Новосибирский зоопарк"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [82.9721, 55.0587]
+        }
+      }
+    ]
+  }
+  

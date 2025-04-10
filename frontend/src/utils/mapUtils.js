@@ -1,6 +1,9 @@
-// Функция для нормализации интенсивности
+// Функция для нормализации интенсивности с усилением низких значений
 export const normalizeIntensity = (intensity, maxIntensity = 10) => {
-  return Math.min(intensity / maxIntensity, 1);
+  // Применяем нелинейную функцию для усиления низких значений
+  // Используем квадратный корень для более плавного увеличения низких значений
+  const normalizedValue = Math.min(intensity / maxIntensity, 1);
+  return Math.sqrt(normalizedValue); // Квадратный корень делает низкие значения более заметными
 };
 
 // Функция для определения радиуса точки на основе интенсивности
@@ -27,21 +30,23 @@ export const getColorForSeverity = (severity) => {
 
 // Функция для расчета актуальности точки на основе времени
 export const calculatePointRelevance = (timestamp, maxAgeHours = 24) => {
-  if (!timestamp) return 0;
+  if (!timestamp) return 0.7; // Увеличиваем минимальное значение по умолчанию
   
   const pointDate = new Date(timestamp);
   const now = new Date();
   const ageHours = (now - pointDate) / (1000 * 60 * 60);
   
-  // Если точка старше максимального возраста, она неактуальна
-  if (ageHours > maxAgeHours) return 0;
+  // Если точка старше максимального возраста, она все равно имеет минимальную видимость
+  if (ageHours > maxAgeHours) return 0.4;
   
-  // Экспоненциальное затухание: чем старше точка, тем меньше её актуальность
-  return Math.exp(-ageHours / maxAgeHours);
+  // Менее крутое экспоненциальное затухание для сохранения лучшей видимости старых точек
+  return 0.4 + 0.6 * Math.exp(-ageHours / (maxAgeHours * 1.5));
 };
 
 // Функция для нормализации интенсивности с учетом времени
-export const normalizeIntensityWithTime = (intensity, timestamp, maxAgeHours = 24) => {
+export const normalizeIntensityWithTime = (intensity, timestamp, maxAgeHours = 48) => { // Увеличил maxAgeHours до 48
   const relevance = calculatePointRelevance(timestamp, maxAgeHours);
-  return normalizeIntensity(intensity) * relevance;
+  const normalizedIntensity = normalizeIntensity(intensity);
+  // Добавляем минимальное значение для гарантии видимости
+  return Math.max(0.3, normalizedIntensity * relevance);
 }; 

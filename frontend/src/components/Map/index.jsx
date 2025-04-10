@@ -231,14 +231,14 @@ const HeatmapLayer = () => {
       // Создаем новую тепловую карту только если есть данные
       if (heatmapData.length > 0) {
         heatmapLayerRef.current = L.heatLayer(heatmapData, {
-          radius: 20,
+          radius: 25,
           blur: 15,
           maxZoom: 10,
           gradient: {
-            0.0: 'rgba(0, 128, 255, 0.7)',
-            0.3: 'rgba(0, 255, 255, 0.7)',
-            0.5: 'rgba(255, 255, 0, 0.8)',
-            0.7: 'rgba(255, 128, 0, 0.9)',
+            0.0: 'rgba(0, 170, 255, 0.9)',
+            0.3: 'rgba(0, 255, 255, 0.9)',
+            0.5: 'rgba(255, 255, 0, 0.95)',
+            0.7: 'rgba(255, 128, 0, 0.95)',
             1.0: 'rgba(255, 0, 0, 1.0)'
           }
         }).addTo(map);
@@ -287,14 +287,14 @@ const WindDispersionLayer = () => {
         // Создаем новый слой с точками распространения только если есть данные
         if (heatmapData.length > 0) {
           windDispersionLayerRef.current = L.heatLayer(heatmapData, {
-            radius: 15,
+            radius: 20,
             blur: 20,
             maxZoom: 18,
             gradient: {
-              0.0: 'rgba(0, 128, 255, 0.7)',
-              0.3: 'rgba(0, 255, 255, 0.7)',
-              0.5: 'rgba(255, 255, 0, 0.8)',
-              0.7: 'rgba(255, 128, 0, 0.9)',
+              0.0: 'rgba(0, 170, 255, 0.9)',
+              0.3: 'rgba(0, 255, 255, 0.9)',
+              0.5: 'rgba(255, 255, 0, 0.95)',
+              0.7: 'rgba(255, 128, 0, 0.95)',
               1.0: 'rgba(255, 0, 0, 1.0)'
             }
           }).addTo(map);
@@ -776,10 +776,23 @@ const UserLocationControl = () => {
     setLoading(true);
     setError(null);
     
+    // Добавляем таймаут для запроса геолокации
+    const timeoutId = setTimeout(() => {
+      setError("Превышено время ожидания определения местоположения. Возможно, включен VPN или прокси.");
+      setLoading(false);
+    }, 10000); // 10 секунд таймаут
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        clearTimeout(timeoutId);
         const { latitude, longitude } = position.coords;
         console.log(`Получены координаты пользователя: ${latitude}, ${longitude}`);
+        
+        // Проверяем, не похоже ли местоположение на VPN/прокси
+        if (latitude === 0 && longitude === 0) {
+          setError("Не удалось определить точное местоположение. Возможно, включен VPN или прокси.");
+          return;
+        }
         
         // Сохраняем местоположение пользователя в хранилище в правильном формате
         setUserLocation({ lat: latitude, lng: longitude });
@@ -790,30 +803,31 @@ const UserLocationControl = () => {
         setLoading(false);
       },
       (err) => {
+        clearTimeout(timeoutId);
         console.error("Ошибка при получении местоположения:", err);
         
-        // Устанавливаем местоположение по умолчанию при ошибке
-        const defaultLocation = { lat: 55.0084, lng: 82.9357 }; // Новосибирск
-        console.log(`Используем местоположение по умолчанию: ${defaultLocation.lat}, ${defaultLocation.lng}`);
-        setUserLocation(defaultLocation);
-        
-        // Отображаем дружелюбное сообщение об ошибке
-        let errorMessage = "Не удалось определить местоположение";
-        if (err.code === 1) {
-          errorMessage = "Доступ к геолокации запрещен. Это может быть связано с использованием HTTP вместо HTTPS.";
-        } else if (err.code === 2) {
-          errorMessage = "Местоположение недоступно.";
-        } else if (err.code === 3) {
-          errorMessage = "Превышено время ожидания при определении местоположения.";
+        let errorMessage = "Не удалось определить ваше местоположение.";
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            errorMessage = "Доступ к геолокации запрещен. Пожалуйста, разрешите доступ в настройках браузера.";
+            break;
+          case err.POSITION_UNAVAILABLE:
+            errorMessage = "Информация о местоположении недоступна. Проверьте подключение к интернету.";
+            break;
+          case err.TIMEOUT:
+            errorMessage = "Превышено время ожидания определения местоположения. Возможно, включен VPN или прокси.";
+            break;
+          default:
+            errorMessage = "Произошла ошибка при определении местоположения.";
         }
         
         setError(errorMessage);
         setLoading(false);
       },
-      { 
-        enableHighAccuracy: true, 
-        timeout: 5000, 
-        maximumAge: 0 
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
       }
     );
   }, [map, setUserLocation]);

@@ -1,4 +1,3 @@
-import { calculatePollenDispersion } from '../utils/pollenDispersion';
 
 // Слайс хранилища для погодных данных
 export const createWeatherSlice = (set, get) => ({
@@ -65,11 +64,20 @@ export const createWeatherSlice = (set, get) => ({
     const windSpeed = typeof weatherData.windSpeed === 'number' ? weatherData.windSpeed : 0;
     const windDirection = typeof weatherData.windDirection === 'number' ? weatherData.windDirection : 0;
     
-    // Создаем новый массив точек распространения
+    // Создаем новый массив точек распространения с учетом всех погодных факторов
     const dispersedPoints = calculatePollenDispersion(
       approvedReports,
       windSpeed,
-      windDirection
+      windDirection,
+      null, // timeIndex не используется для текущих данных
+      {
+        temperature: weatherData.temperature,
+        humidity: weatherData.humidity,
+        precipitation: weatherData.precipitation || 0, // Добавляем 0, если нет данных об осадках
+        // Другие погодные данные, если они доступны
+        pressure: weatherData.pressure,
+        description: weatherData.description,
+      }
     );
     
     console.log(`Сгенерировано ${dispersedPoints.length} точек распространения`);

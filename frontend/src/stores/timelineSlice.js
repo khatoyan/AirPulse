@@ -155,7 +155,15 @@ export const createTimelineSlice = (set, get) => ({
       approvedReports,
       weatherData.wind_speed,
       windDirection,
-      timeIndex // передаем индекс времени для отладки
+      timeIndex, // передаем индекс времени для отладки
+      {
+        temperature: weatherData.temp,
+        humidity: weatherData.humidity,
+        precipitation: weatherData.precipitation || 0,
+        // Другие погодные данные из прогноза, если они доступны
+        pressure: weatherData.pressure,
+        description: weatherData.description || weatherData.weather_description
+      }
     );
     
     console.log(`Сгенерировано ${dispersedPoints.length} точек распространения для прогноза времени`);
@@ -203,5 +211,52 @@ export const createTimelineSlice = (set, get) => ({
     } catch (error) {
       console.error('Ошибка при загрузке прогноза погоды:', error);
     }
+  },
+  
+  // Генерация точек распространения для выбранной временной точки
+  generateTimePointDispersion: (timePoint, reports) => {
+    if (!timePoint || !reports || reports.length === 0) {
+      console.log('Нет данных для генерации точек распространения по времени');
+      return [];
+    }
+    
+    console.log(`Генерация точек распространения для времени: ${timePoint.hourLabel}`);
+    console.log('Данные о погоде:', timePoint);
+    
+    // Извлекаем погодные данные для этой временной точки
+    const windSpeed = timePoint.wind_speed;
+    const windDirection = timePoint.wind_deg;
+    
+    // Фильтруем одобренные отчеты
+    const approvedReports = reports.filter(report => report.approved);
+    
+    if (approvedReports.length === 0) {
+      console.log('Нет одобренных отчетов для генерации точек распространения');
+      return [];
+    }
+    
+    // Получаем индекс временной точки
+    const { forecastData, selectedTimeIndex } = get();
+    const timeIndex = selectedTimeIndex || 0;
+    
+    // Создаем новый массив точек распространения
+    const dispersedPoints = calculatePollenDispersion(
+      approvedReports,
+      windSpeed,
+      windDirection,
+      timeIndex,
+      {
+        temperature: timePoint.temp,
+        humidity: timePoint.humidity,
+        precipitation: timePoint.precipitation || 0,
+        // Другие погодные данные из прогноза, если они доступны
+        pressure: timePoint.pressure,
+        description: timePoint.description || timePoint.weather_description
+      }
+    );
+    
+    console.log(`Сгенерировано ${dispersedPoints.length} точек распространения для прогноза времени`);
+    
+    return dispersedPoints;
   }
 }); 
