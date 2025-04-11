@@ -4,6 +4,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useMapStore } from '../../stores/mapStore';
 import { Box, Paper, Typography, Divider, Tooltip, CircularProgress, ButtonGroup, Button, Stack, IconButton, useMediaQuery, useTheme } from '@mui/material';
 import ReportForm from '../ReportForm';
@@ -277,6 +279,13 @@ const HeatmapLayer = () => {
 
   }, [map, reports, updateHeatmap, selectedAllergen]);
 
+  // Добавляем обработчик событий для более быстрого обновления при изменении зума
+  useMapEvents({
+    zoomend: () => {
+      useMapStore.getState().setUpdateHeatmap(Date.now());
+    }
+  });
+
   return null;
 };
 
@@ -396,7 +405,7 @@ const WindDispersionLayer = () => {
   // Перерисовываем тепловую карту при изменении зума
   const mapEvents = useMapEvents({
     zoomend: () => {
-      // Обновляем updateHeatmap для перерисовки тепловой карты
+      // Обновляем тепловой слой после завершения зума
       useMapStore.getState().setUpdateHeatmap(Date.now());
     }
   });
@@ -538,7 +547,38 @@ function PointMarkers() {
     console.log(`[PointMarkers] Количество маркеров в видимой области: ${visibleReports.length}`);
 
     // Initialize a marker cluster group
-    const markerClusterGroup = L.markerClusterGroup();
+    const markerClusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 50, // Максимальный радиус кластера (px)
+      disableClusteringAtZoom: 18, // На максимальном зуме показывать все маркеры
+      spiderfyOnMaxZoom: true, // Разворачивать кластеры на максимальном зуме в виде сетки
+      showCoverageOnHover: true, // Показывать область охвата при наведении
+      zoomToBoundsOnClick: true, // При клике на кластер приближать к его границам
+      chunkedLoading: true, // Загружать маркеры порциями для улучшения производительности
+      chunkProgress: (processed, total) => {
+        console.log(`[PointMarkers] Loaded ${processed} of ${total} markers`);
+      },
+      // Создаём невидимые кластеры с сохранением функциональности
+      iconCreateFunction: function(cluster) {
+        const count = cluster.getChildCount();
+        // Используем разные размеры невидимых областей для клика в зависимости от количества точек
+        let size;
+        
+        if (count >= 100) {
+          size = 40;
+        } else if (count >= 10) {
+          size = 30;
+        } else {
+          size = 20;
+        }
+        
+        // Возвращаем почти невидимую иконку
+        return L.divIcon({
+          html: '', // Пустой HTML
+          className: 'invisible-cluster', // Специальный класс для невидимых кластеров
+          iconSize: L.point(size, size)
+        });
+      }
+    });
 
     visibleReports.forEach((report) => {
       try {
@@ -548,11 +588,8 @@ function PointMarkers() {
           iconKey = 'plant';
         }
         
-        console.log(`[PointMarkers] Создание маркера типа "${iconKey}" для отчета:`, report);
-        
         // Use the icon based on report type
         const icon = ICONS[iconKey];
-        console.log(`[PointMarkers] Используемая иконка:`, icon);
         
         // Проверяем координаты
         console.log(`[PointMarkers] Координаты маркера:`, report.coordinates);
@@ -562,10 +599,6 @@ function PointMarkers() {
           title: report.type === 'symptom' ? report.symptom : report.plantType,
           zIndexOffset: 1000
         });
-        
-        // Добавляем маркер на карту
-        marker.addTo(map);
-        console.log(`[PointMarkers] Маркер добавлен на карту`);
         
         // Add popup for additional information
         const popupContent = `
@@ -1234,10 +1267,9 @@ function Map() {
         center={[55.0084, 82.9357]} // Новосибирск как начальный центр
         zoom={13}
         minZoom={13}
-        maxBounds={[[55.0074, 82.9337], [55.0094, 82.9377]]}
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
-        preferCanvas={true}
+        renderer={L.canvas()}
       >
         <FloweringAlert />
         <TileLayer
