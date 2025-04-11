@@ -14,11 +14,53 @@ const FloweringCalendar = () => {
   // Check if we're on the main calendar page or inside a tab
   const isStandalonePage = location.pathname === '/calendar';
 
+  // Функция для нормализации названий растений
+  const normalizePlantName = (name) => {
+    if (!name) return '';
+    
+    let normalized = name.trim().toLowerCase();
+    
+    // Замена 'е' на 'ё' в названиях растений
+    if (normalized.includes('берез')) {
+      normalized = normalized.replace('берез', 'берёз');
+    }
+    
+    return normalized;
+  };
+
   useEffect(() => {
     const fetchPlants = async () => {
       try {
         const response = await axios.get(`${import.meta.env.VITE_API_URL}/plants`);
-        setPlants(response.data);
+        
+        // Удаляем дубликаты растений, используя Map с именем растения как ключ
+        const uniquePlantMap = new Map();
+        
+        // Стандартизируем названия растений
+        const standardizedPlants = response.data.map(plant => {
+          if (plant.name.includes('Береза')) {
+            return { ...plant, name: plant.name.replace('Береза', 'Берёза') };
+          }
+          return plant;
+        });
+        
+        standardizedPlants.forEach(plant => {
+          const normalizedName = normalizePlantName(plant.name);
+          
+          // Если растение с таким именем еще не добавлено или текущее имеет более полные данные
+          if (!uniquePlantMap.has(normalizedName) || 
+              (!uniquePlantMap.get(normalizedName).bloomStart && plant.bloomStart)) {
+            uniquePlantMap.set(normalizedName, plant);
+          }
+        });
+        
+        // Преобразуем Map обратно в массив и сортируем по имени
+        const uniquePlants = Array.from(uniquePlantMap.values()).sort((a, b) => 
+          a.name.localeCompare(b.name, 'ru')
+        );
+        
+        console.log(`Получено ${response.data.length} растений, после удаления дубликатов: ${uniquePlants.length}`);
+        setPlants(uniquePlants);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching plants data:', error);

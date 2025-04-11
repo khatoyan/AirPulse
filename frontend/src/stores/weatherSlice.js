@@ -51,12 +51,33 @@ export const createWeatherSlice = (set, get) => ({
     
     console.log('Генерация точек распространения на основе данных о ветре');
     
+    // Кэш для хранения результатов вычислений
+    const state = get();
+    const dispersionCache = state.dispersionCache || {};
+    
     // Берем только одобренные отчеты для расчета
     const approvedReports = reports.filter(report => report.approved);
     
     if (approvedReports.length === 0) {
       console.log('Нет одобренных отчетов для генерации точек');
       set({ dispersedPoints: [] });
+      return;
+    }
+    
+    // Проверяем есть ли уже загруженные данные и нужно ли пересчитывать
+    // Создаем хеш текущих параметров
+    const hashParams = () => {
+      const windParams = `${weatherData.windSpeed}_${weatherData.windDirection}`;
+      const reportIds = approvedReports.map(r => r.id).sort().join('_');
+      return `${windParams}_${reportIds.substring(0, 100)}`;
+    };
+    
+    const currentParamsHash = hashParams();
+    
+    // Если уже есть кэшированный результат для этих параметров, используем его
+    if (dispersionCache[currentParamsHash]) {
+      console.log('Используем кэшированные точки распространения');
+      set({ dispersedPoints: dispersionCache[currentParamsHash] });
       return;
     }
     
@@ -73,24 +94,30 @@ export const createWeatherSlice = (set, get) => ({
       {
         temperature: weatherData.temperature,
         humidity: weatherData.humidity,
-        precipitation: weatherData.precipitation || 0, // Добавляем 0, если нет данных об осадках
-        // Другие погодные данные, если они доступны
+        precipitation: weatherData.precipitation || 0,
         pressure: weatherData.pressure,
         description: weatherData.description,
       }
     );
     
-    console.log(`Сгенерировано ${dispersedPoints.length} точек распространения`);
+    // Сохраняем результат в кэш и в состояние
+    const newCache = { ...dispersionCache };
     
-    // Проверяем, активен ли режим прогноза
-    const { timelineActive } = get();
-    
-    // Обновляем только если не активен режим прогноза
-    if (!timelineActive) {
-      set({ 
-        dispersedPoints,
-        updateHeatmap: Date.now() // Тригер обновления тепловой карты
-      });
+    // Ограничиваем размер кэша (максимум 5 разных состояний)
+    const cacheKeys = Object.keys(newCache);
+    if (cacheKeys.length >= 5) {
+      // Удаляем самый старый ключ
+      delete newCache[cacheKeys[0]];
     }
+    
+    // Добавляем новые данные в кэш
+    newCache[currentParamsHash] = dispersedPoints;
+    
+    set({ 
+      dispersedPoints,
+      dispersionCache: newCache
+    });
+    
+    console.log(`Сгенерировано и кэшировано ${dispersedPoints.length} точек`);
   }
 });

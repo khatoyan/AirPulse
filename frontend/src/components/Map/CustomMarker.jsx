@@ -3,11 +3,10 @@ import { Marker } from 'react-leaflet';
 import L from 'leaflet';
 import plantIcon from '../../assets/icons/plant-marker.svg';
 import symptomIcon from '../../assets/icons/symptom-marker.svg';
-import defaultIcon from '../../assets/icons/default-marker.svg';
 
 // Функция для определения иконки на основе типа отчета
 const getMarkerIcon = (reportType, options = {}) => {
-  const { size = 32 } = options;
+  const { size = 20 } = options;
   
   let iconUrl;
   
@@ -15,11 +14,8 @@ const getMarkerIcon = (reportType, options = {}) => {
     case 'plant':
       iconUrl = plantIcon;
       break;
-    case 'symptom':
-      iconUrl = symptomIcon;
-      break;
     default:
-      iconUrl = defaultIcon;
+      iconUrl = symptomIcon;
   }
   
   return L.icon({

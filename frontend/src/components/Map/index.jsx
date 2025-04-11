@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
+import 'leaflet.markercluster';
 import { useMapStore } from '../../stores/mapStore';
 import { Box, Paper, Typography, Divider, Tooltip, CircularProgress, ButtonGroup, Button, Stack, IconButton, useMediaQuery, useTheme } from '@mui/material';
 import ReportForm from '../ReportForm';
@@ -13,16 +14,17 @@ import AirIcon from '@mui/icons-material/Air';
 import ThermostatIcon from '@mui/icons-material/Thermostat';
 import WaterIcon from '@mui/icons-material/Water';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import MyLocationIcon from '@mui/icons-material/MyLocation';
 import CloseIcon from '@mui/icons-material/Close';
 // Импортируем компоненты временной шкалы
 import TimeSlider from './TimeSlider';
 import FloweringAlert from './FloweringAlert';
-import { normalizeIntensity, getPointRadius, getColorForSeverity, normalizeIntensityWithTime } from '../../utils/mapUtils';
+import { normalizeIntensityWithTime } from '../../utils/mapUtils';
+// Импортируем функцию для проверки цветения растений
+import { isPlantFlowering } from '../../utils/pollenDispersion';
 
 // Импорт иконок для меток
-import plantIcon from '../../assets/icons/plant-marker.svg';
-import symptomIcon from '../../assets/icons/symptom-marker.svg';
+const symptomIcon = new URL('../../assets/icons/symptom-marker.svg', import.meta.url).href;
+const plantIcon = new URL('../../assets/icons/plant-marker.svg', import.meta.url).href;
 
 // Переопределяем иконку по умолчанию, чтобы избежать дублирования маркеров
 delete L.Icon.Default.prototype._getIconUrl;
@@ -34,6 +36,7 @@ L.Icon.Default.mergeOptions({
 
 // Создаем кастомные иконки для Leaflet
 const createIcon = (iconUrl, iconSize = [16, 16]) => {
+  console.log('Creating icon with URL:', iconUrl);
   return L.icon({
     iconUrl,
     iconSize,
@@ -44,9 +47,8 @@ const createIcon = (iconUrl, iconSize = [16, 16]) => {
 
 // Инициализация иконок
 const ICONS = {
-  plant: createIcon(plantIcon),
-  symptom: createIcon(symptomIcon),
-  default: createIcon(symptomIcon) // Добавляем дефолтную иконку на случай неопределенного типа
+  plant: createIcon(plantIcon, [16, 16]),
+  symptom: createIcon(symptomIcon, [16, 16])
 };
 
 // Добавляем компонент выбора аллергена
@@ -202,9 +204,14 @@ const HeatmapLayer = () => {
       let displayReports = reports || [];
       
       if (selectedAllergen) {
+        // Нормализуем выбранный аллерген (учитывая возможность "береза"/"берёза")
+        const normalizedAllergen = selectedAllergen.toLowerCase().replace('береза', 'берёза');
+        
         displayReports = displayReports.filter(report => {
           if (report.plantType && report.type === 'plant') {
-            return report.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
+            // Нормализуем plantType
+            const plantType = report.plantType.toLowerCase().replace('береза', 'берёза');
+            return plantType.includes(normalizedAllergen);
           }
           return false;
         });
@@ -214,10 +221,28 @@ const HeatmapLayer = () => {
       const heatmapData = displayReports
         .filter(report => report && !report.isCalculated)
         .map(report => {
+          // Получаем базовую интенсивность
+          let intensity = report.severity || 3;
+          
+          // Проверяем, является ли это растением и находится ли оно в периоде цветения
+          if (report.type === 'plant') {
+            const plantType = report.plantType || report.genus || 'unknown';
+            // Если растение не цветет, значительно уменьшаем его интенсивность
+            if (!isPlantFlowering(plantType)) {
+              intensity = intensity * 0.05; // 95% снижение интенсивности для нецветущих растений
+              console.log(`Растение ${plantType} не цветет, значительно уменьшена интенсивность до ${intensity}`);
+            } else {
+              console.log(`Растение ${plantType} цветет, сохранена интенсивность ${intensity}`);
+            }
+          }
+          
+          // Нормализуем интенсивность с учетом времени
+          const normalizedIntensity = normalizeIntensityWithTime(intensity, report.timestamp);
+          
           return [
-            report.latitude,
-            report.longitude,
-            normalizeIntensityWithTime(report.severity, report.timestamp)
+            report.latitude || report.lat,
+            report.longitude || report.lng,
+            normalizedIntensity
           ];
         });
 
@@ -231,16 +256,19 @@ const HeatmapLayer = () => {
       // Создаем новую тепловую карту только если есть данные
       if (heatmapData.length > 0) {
         heatmapLayerRef.current = L.heatLayer(heatmapData, {
-          radius: 25,
-          blur: 15,
-          maxZoom: 10,
+          radius: 20, // Увеличиваем радиус для более диффузного эффекта
+          blur: 40, // Увеличиваем размытие
+          maxZoom: 12,
+          // Еще более прозрачная цветовая схема
           gradient: {
-            0.0: 'rgba(0, 170, 255, 0.9)',
-            0.3: 'rgba(0, 255, 255, 0.9)',
-            0.5: 'rgba(255, 255, 0, 0.95)',
-            0.7: 'rgba(255, 128, 0, 0.95)',
-            1.0: 'rgba(255, 0, 0, 1.0)'
-          }
+            0.0: 'rgba(0, 255, 0, 0)', // Полностью прозрачный
+            0.1: 'rgba(0, 255, 0, 0.05)', // Едва заметный зеленый
+            0.3: 'rgba(255, 255, 0, 0.08)', // Очень слабый желтый
+            0.5: 'rgba(255, 128, 0, 0.12)', // Очень слабый оранжевый
+            0.7: 'rgba(255, 0, 0, 0.18)', // Слабый красный
+            1.0: 'rgba(128, 0, 128, 0.25)' // Слабый фиолетовый
+          },
+          minOpacity: 0.01 // Еще ниже минимальная прозрачность
         }).addTo(map);
       }
     } catch (error) {
@@ -270,35 +298,94 @@ const WindDispersionLayer = () => {
         map.removeLayer(windDispersionLayerRef.current);
       }
       
-      if (pointsToDisplay && pointsToDisplay.length > 0) {
-        // Преобразуем точки в формат для L.heatLayer
-        const heatmapData = pointsToDisplay
-          .filter(point => point && point.latitude && point.longitude)
-          .map(point => {
-            return [
-              point.latitude,
-              point.longitude,
-              normalizeIntensityWithTime(point.severity, point.timestamp)
-            ];
-          });
-        
-        console.log(`Отображение ${heatmapData.length} точек рассеивания ветром (timelineActive: ${timelineActive})`);
-        
-        // Создаем новый слой с точками распространения только если есть данные
-        if (heatmapData.length > 0) {
-          windDispersionLayerRef.current = L.heatLayer(heatmapData, {
-            radius: 20,
-            blur: 20,
-            maxZoom: 18,
-            gradient: {
-              0.0: 'rgba(0, 170, 255, 0.9)',
-              0.3: 'rgba(0, 255, 255, 0.9)',
-              0.5: 'rgba(255, 255, 0, 0.95)',
-              0.7: 'rgba(255, 128, 0, 0.95)',
-              1.0: 'rgba(255, 0, 0, 1.0)'
-            }
-          }).addTo(map);
+      // Если нет точек для отображения, ничего не делаем
+      if (!pointsToDisplay || pointsToDisplay.length === 0) {
+        return;
+      }
+      
+      // Ограничиваем количество отображаемых точек для производительности
+      // Сначала сортируем точки по интенсивности (от наибольшей к наименьшей)
+      const sortedPoints = [...pointsToDisplay].sort((a, b) => 
+        (b.severity || 0) - (a.severity || 0)
+      );
+      
+      // Получаем текущий уровень зума
+      const currentZoom = map.getZoom();
+      
+      // Определяем максимальное количество точек в зависимости от зума
+      const getMaxPoints = (zoom) => {
+        if (zoom >= 15) return 5000; // Высокий зум - больше деталей
+        if (zoom >= 12) return 3000; // Средний зум
+        if (zoom >= 9) return 2000; // Низкий зум
+        return 1000; // Очень низкий зум
+      };
+      
+      // Определяем параметры тепловой карты в зависимости от зума
+      const getHeatmapParams = (zoom) => {
+        if (zoom >= 15) {
+          return { radius: 15, blur: 20 }; // На высоком зуме меньше радиус для точности
         }
+        if (zoom >= 12) {
+          return { radius: 25, blur: 25 };
+        }
+        if (zoom >= 9) {
+          return { radius: 35, blur: 30 };
+        }
+        return { radius: 45, blur: 35 }; // На низком зуме больше радиус для видимости
+      };
+      
+      const maxPoints = getMaxPoints(currentZoom);
+      const limitedPoints = sortedPoints.length > maxPoints 
+        ? sortedPoints.slice(0, maxPoints) 
+        : sortedPoints;
+      
+      console.log(`Отображение ${limitedPoints.length} из ${pointsToDisplay.length} точек рассеивания (зум: ${currentZoom})`);
+      
+      // Преобразуем точки в формат для L.heatLayer
+      const heatmapData = limitedPoints
+        .filter(point => point && point.latitude && point.longitude)
+        .map(point => {
+          // Проверяем, является ли точка результатом распространения от нецветущего растения
+          let intensity = point.severity || 3;
+          
+          if (point.plantType) {
+            // Если растение не цветет, уменьшаем интенсивность его распространения
+            if (!isPlantFlowering(point.plantType)) {
+              intensity = intensity * 0.03; // 97% снижение для нецветущих
+            }
+          }
+          
+          // Дополнительно проверяем и применяем временное затухание
+          const normalizedIntensity = normalizeIntensityWithTime(intensity, point.timestamp);
+          
+          return [
+            point.latitude,
+            point.longitude,
+            normalizedIntensity
+          ];
+        });
+      
+      // Получаем параметры тепловой карты в зависимости от текущего зума
+      const { radius, blur } = getHeatmapParams(currentZoom);
+      
+      // Создаем новый слой с точками распространения только если есть данные
+      if (heatmapData.length > 0) {
+        windDispersionLayerRef.current = L.heatLayer(heatmapData, {
+          radius: radius,
+          blur: blur,
+          maxZoom: 18,
+          // Прозрачная градация цветов
+          gradient: {
+            0.0: 'rgba(0, 255, 0, 0)', // Полностью прозрачный
+            0.1: 'rgba(0, 255, 0, 0.04)', // Едва заметный зеленый
+            0.3: 'rgba(255, 255, 0, 0.07)', // Очень слабый желтый
+            0.5: 'rgba(255, 192, 0, 0.1)', // Очень слабый оранжево-желтый
+            0.7: 'rgba(255, 128, 0, 0.15)', // Слабый оранжевый
+            0.85: 'rgba(255, 0, 0, 0.18)', // Слабый красный
+            1.0: 'rgba(128, 0, 128, 0.22)' // Слабый фиолетовый
+          },
+          minOpacity: 0.01 // Крайне низкая минимальная прозрачность
+        }).addTo(map);
       }
     } catch (error) {
       console.error('Ошибка при создании слоя распространения:', error);
@@ -306,68 +393,211 @@ const WindDispersionLayer = () => {
     
   }, [map, dispersedPoints, timeDispersionPoints, timelineActive, updateHeatmap]);
   
+  // Перерисовываем тепловую карту при изменении зума
+  const mapEvents = useMapEvents({
+    zoomend: () => {
+      // Обновляем updateHeatmap для перерисовки тепловой карты
+      useMapStore.getState().setUpdateHeatmap(Date.now());
+    }
+  });
+  
   return null;
 };
 
-// Добавляем маркеры с иконками в зависимости от типа отчета
-const PointMarkers = () => {
+// Компонент отрисовки точек на карте с разбивкой на категории
+function PointMarkers() {
   const { reports, selectedAllergen } = useMapStore();
-  const [loading, setLoading] = useState(true);
+  const markersLayerRef = useRef(null);
+  const map = useMap();
+  const [visibleBounds, setVisibleBounds] = useState(map.getBounds());
   
+  // Добавляем логирование для анализа поступающих отчетов
   useEffect(() => {
-    if (reports.length > 0) {
-      setLoading(false);
+    if (reports && reports.length > 0) {
+      console.log(`[PointMarkers] Получено ${reports.length} отчетов из хранилища`);
+      
+      // Анализируем типы отчетов для диагностики
+      const plantsCount = reports.filter(r => r.type === 'plant').length;
+      const symptomsCount = reports.filter(r => r.type === 'symptom').length;
+      const calculatedCount = reports.filter(r => r.isCalculated).length;
+      
+      // Подсчитываем городские деревья (начинаются с 'city_')
+      const cityTreesCount = reports.filter(r => typeof r.id === 'string' && r.id.startsWith('city_')).length;
+      
+      console.log(`[PointMarkers] Анализ типов отчетов:
+        - Растения: ${plantsCount}
+        - Симптомы: ${symptomsCount}
+        - Городские деревья: ${cityTreesCount}
+        - Рассчитанные точки: ${calculatedCount}
+      `);
+      
+      // Проверяем наличие координат во всех отчетах
+      const missingCoords = reports.filter(r => !r.lat || !r.lng).length;
+      if (missingCoords > 0) {
+        console.warn(`[PointMarkers] Внимание: ${missingCoords} отчетов не имеют координат!`);
+      }
+      
+      // Выводим примеры разных типов отчетов для диагностики
+      const plantExample = reports.find(r => r.type === 'plant' && !(typeof r.id === 'string' && r.id.startsWith('city_')));
+      const cityExample = reports.find(r => typeof r.id === 'string' && r.id.startsWith('city_'));
+      
+      if (plantExample) {
+        console.log('[PointMarkers] Пример отчета о растении из БД:', plantExample);
+      }
+      
+      if (cityExample) {
+        console.log('[PointMarkers] Пример отчета о городском дереве:', cityExample);
+      } else {
+        console.warn('[PointMarkers] Не найдено ни одного городского дерева среди отчетов!');
+      }
     } else {
-      setTimeout(() => setLoading(false), 1000);
+      console.log('[PointMarkers] Данные еще загружаются или отчеты отсутствуют');
     }
   }, [reports]);
-  
-  // Если данные загружаются, не отображаем маркеры
-  if (loading) return null;
-  
-  // Фильтруем отчеты по выбранному аллергену
-  const filteredReports = reports.filter(report => {
-    // Показываем только точки, которые не рассчитаны
-    if (report.isCalculated) return false;
+
+  // Отрисовка меток на карте
+  useEffect(() => {
+    if (!map || !reports) return;
+
+    console.log(`[PointMarkers] Начинаем рендеринг маркеров. Выбранный аллерген: ${selectedAllergen || 'все'}`);
+    console.log('[PointMarkers] Доступные иконки:', ICONS);
+    console.log('[PointMarkers] URL иконок:', {
+      plant: plantIcon,
+      symptom: symptomIcon
+    });
     
-    // Если не выбран аллерген, показываем все отчеты
-    if (!selectedAllergen) return true;
-    
-    // Для отчетов типа "plant" проверяем соответствие выбранному аллергену
-    if (report.type === 'plant' && report.plantType) {
-      return report.plantType.toLowerCase().includes(selectedAllergen.toLowerCase());
+    // Удаляем существующие маркеры
+    if (markersLayerRef.current) {
+      map.removeLayer(markersLayerRef.current);
     }
+
+    // Фильтруем отчеты на основе выбранного аллергена
+    let filteredReports = reports;
+    if (selectedAllergen) {
+      // Нормализуем выбранный аллерген (учитывая возможность "береза"/"берёза")
+      const normalizedAllergen = selectedAllergen.toLowerCase().replace('береза', 'берёза');
+      
+      filteredReports = reports.filter((report) => {
+        // Для симптомов проверяем аллерген
+        if (report.type === 'symptom') {
+          const allergen = report.allergen?.toLowerCase().replace('береза', 'берёза');
+          return allergen === normalizedAllergen;
+        }
+        // Для растений проверяем genus
+        if (report.type === 'plant') {
+          const genus = report.genus?.toLowerCase().replace('береза', 'берёза');
+          return genus === normalizedAllergen;
+        }
+        return false;
+      });
+      console.log(`[PointMarkers] Отчеты отфильтрованы по аллергену "${selectedAllergen}": ${filteredReports.length} из ${reports.length}`);
+    }
+
+    // Отрисовываем отфильтрованные отчеты
+    console.log(`[PointMarkers] Отрисовка ${filteredReports.length} маркеров`);
     
-    // Для отчетов типа "symptom" всегда показываем
-    return report.type === 'symptom';
-  });
-  
-  return (
-    <>
-      {filteredReports.map((report, index) => {
-        const icon = report.type === 'plant' ? ICONS.plant : ICONS.symptom;
+    // Подсчитываем маркеры по источникам для логирования
+    const dbPlants = filteredReports.filter(r => r.type === 'plant' && !(typeof r.id === 'string' && r.id.startsWith('city_'))).length;
+    const cityTrees = filteredReports.filter(r => typeof r.id === 'string' && r.id.startsWith('city_')).length;
+    const symptoms = filteredReports.filter(r => r.type === 'symptom').length;
+    const calculated = filteredReports.filter(r => r.isCalculated).length;
+    
+    console.log(`[PointMarkers] Распределение отрисовываемых маркеров:
+      - Растения из БД: ${dbPlants}
+      - Городские деревья: ${cityTrees}
+      - Симптомы: ${symptoms}
+      - Рассчитанные точки: ${calculated}
+    `);
+
+    // Отфильтровываем только отчеты с валидными координатами
+    const reportsWithCoordinates = filteredReports.filter(report => {
+      // Проверяем, что у отчета есть координаты в любом допустимом формате
+      if (report.coordinates && Array.isArray(report.coordinates) && report.coordinates.length === 2) {
+        return true;
+      }
+      
+      if (report.latitude !== undefined && report.longitude !== undefined) {
+        // Создаем массив координат, если его нет
+        report.coordinates = [report.latitude, report.longitude];
+        return true;
+      }
+      
+      if (report.lat !== undefined && report.lng !== undefined) {
+        // Создаем массив координат, если его нет
+        report.coordinates = [report.lat, report.lng];
+        return true;
+      }
+      
+      return false;
+    });
+    
+    console.log(`[PointMarkers] После фильтрации координат осталось ${reportsWithCoordinates.length} из ${filteredReports.length} маркеров`);
+    const visibleReports = visibleBounds ? reportsWithCoordinates.filter(report => {
+      return visibleBounds.contains(L.latLng(report.coordinates[0], report.coordinates[1]));
+    }) : reportsWithCoordinates;
+    console.log(`[PointMarkers] Количество маркеров в видимой области: ${visibleReports.length}`);
+
+    // Initialize a marker cluster group
+    const markerClusterGroup = L.markerClusterGroup();
+
+    visibleReports.forEach((report) => {
+      try {
+        // Определяем тип иконки на основе типа отчета
+        let iconKey = 'symptom'; // Default to symptom if no specific type
+        if (report.type === 'plant') {
+          iconKey = 'plant';
+        }
         
-        return (
-          <Marker 
-            key={`marker-${report.id || index}`}
-            position={[report.latitude, report.longitude]} 
-            icon={icon}
-          >
-            <Popup>
-              <div className="report-popup">
-                <h3>Отчет о {report.type === 'symptom' ? 'симптоме' : 'растении'}</h3>
-                <p><strong>Тип:</strong> {report.type === 'symptom' ? report.symptom : report.plantType}</p>
-                <p><strong>Интенсивность:</strong> {report.severity}/5</p>
-                {report.description && <p><strong>Описание:</strong> {report.description}</p>}
-                <p><strong>Дата:</strong> {new Date(report.createdAt).toLocaleDateString()}</p>
-              </div>
-            </Popup>
-          </Marker>
-        );
-      })}
-    </>
-  );
-};
+        console.log(`[PointMarkers] Создание маркера типа "${iconKey}" для отчета:`, report);
+        
+        // Use the icon based on report type
+        const icon = ICONS[iconKey];
+        console.log(`[PointMarkers] Используемая иконка:`, icon);
+        
+        // Проверяем координаты
+        console.log(`[PointMarkers] Координаты маркера:`, report.coordinates);
+        
+        const marker = L.marker(report.coordinates, {
+          icon: icon,
+          title: report.type === 'symptom' ? report.symptom : report.plantType,
+          zIndexOffset: 1000
+        });
+        
+        // Добавляем маркер на карту
+        marker.addTo(map);
+        console.log(`[PointMarkers] Маркер добавлен на карту`);
+        
+        // Add popup for additional information
+        const popupContent = `
+          <div class="report-popup">
+            <h3>${report.type === 'plant' ? (report.plantType || 'Растение') : (report.symptom || 'Симптом')}</h3>
+            <p><strong>Тип:</strong> ${report.type === 'plant' ? 'Растение' : 'Симптом'}</p>
+            <p><strong>Интенсивность:</strong> ${report.severity || 'N/A'}/5</p>
+            ${report.description ? `<p>${report.description}</p>` : ''}
+          </div>
+        `;
+        
+        marker.bindPopup(popupContent);
+        markerClusterGroup.addLayer(marker);
+      } catch (error) {
+        console.error('[PointMarkers] Ошибка при создании маркера:', error);
+      }
+    });
+
+    // Add the cluster group to the map and store it in the ref
+    map.addLayer(markerClusterGroup);
+    markersLayerRef.current = markerClusterGroup;
+
+  }, [map, reports, selectedAllergen, visibleBounds]);
+
+  useMapEvents({
+    moveend: () => {
+      setVisibleBounds(map.getBounds());
+    }
+  });
+
+  return null;
+}
 
 // Компонент для обработки событий карты
 const MapController = () => {
@@ -797,8 +1027,17 @@ const UserLocationControl = () => {
         // Сохраняем местоположение пользователя в хранилище в правильном формате
         setUserLocation({ lat: latitude, lng: longitude });
         
-        // Перемещаем карту к местоположению пользователя
-        map.setView([latitude, longitude], 13);
+        // Проверяем, что карта существует и инициализирована перед использованием setView
+        if (map && map._loaded) {
+          try {
+            // Перемещаем карту к местоположению пользователя
+            map.setView([latitude, longitude], 13);
+          } catch (err) {
+            console.error('Ошибка при перемещении карты:', err);
+          }
+        } else {
+          console.log('Карта не полностью инициализирована, пропускаем setView');
+        }
         
         setLoading(false);
       },
@@ -993,9 +1232,12 @@ function Map() {
     <Box sx={{ position: 'relative', width: '100%', height: '80vh' }}>
       <MapContainer
         center={[55.0084, 82.9357]} // Новосибирск как начальный центр
-        zoom={11}
+        zoom={13}
+        minZoom={13}
+        maxBounds={[[55.0074, 82.9337], [55.0094, 82.9377]]}
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
+        preferCanvas={true}
       >
         <FloweringAlert />
         <TileLayer

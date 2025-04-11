@@ -26,11 +26,6 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-.leaflet-marker-icon {
-  background-image: url('https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png');
-  background-size: contain;
-}
-
 .leaflet-popup-content-wrapper {
   border-radius: 8px;
   padding: 0;
@@ -128,6 +123,15 @@
 .leaflet-marker-icon.leaflet-zoom-animated.leaflet-interactive {
   background-image: none !important;
   background: transparent !important;
+  z-index: 2000 !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  display: block !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin-left: -8px !important;
+  margin-top: -16px !important;
 }
 
 /* Убедимся, что дефолтные иконки не будут показываться на фоне */
@@ -138,6 +142,26 @@
 /* Убедимся, что тень маркера также не отображается */
 .leaflet-marker-shadow {
   display: none !important;
+}
+
+/* Make sure custom marker icons are visible */
+.leaflet-marker-icon img {
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.5)) !important;
+  z-index: 2000 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Force SVG marker content to be visible */
+.leaflet-marker-icon svg {
+  width: 100% !important;
+  height: 100% !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
 }
 
 /* Переопределяем стили Leaflet, чтобы контролы были более заметными */

@@ -28,9 +28,59 @@ const FloweringAlert = () => {
     return null;
   }
 
-  // Get up to 3 plants to display in alert
-  const plantsToDisplay = floweringPlants.slice(0, 3);
-  const hasMorePlants = floweringPlants.length > 3;
+  // Group plants by their family/category
+  const groupPlantsByCategory = (plants) => {
+    const groups = {};
+    
+    plants.forEach(plant => {
+      // Try to determine plant family/category
+      // First check if plant has a category field
+      let category = plant.category;
+      
+      // If no category, try to extract from name
+      if (!category) {
+        // Check common tree families
+        if (/берез|birch/i.test(plant.name)) category = 'Берёза';
+        else if (/ольх|alder/i.test(plant.name)) category = 'Ольха';
+        else if (/дуб|oak/i.test(plant.name)) category = 'Дуб';
+        else if (/топол|poplar/i.test(plant.name)) category = 'Тополь';
+        else if (/злак|grass/i.test(plant.name)) category = 'Злаковые';
+        else category = 'Другие';
+      }
+      
+      // Initialize category if it doesn't exist
+      if (!groups[category]) {
+        groups[category] = {
+          name: category,
+          count: 0,
+          maxAllergenicity: 0,
+          plants: []
+        };
+      }
+      
+      // Add plant to category
+      groups[category].count++;
+      groups[category].plants.push(plant);
+      
+      // Update max allergenicity for the category
+      const allergenicity = parseInt(plant.allergenicity) || 0;
+      if (allergenicity > groups[category].maxAllergenicity) {
+        groups[category].maxAllergenicity = allergenicity;
+      }
+    });
+    
+    // Convert to array and sort by allergenicity (highest first)
+    return Object.values(groups).sort((a, b) => b.maxAllergenicity - a.maxAllergenicity);
+  };
+  
+  const plantGroups = groupPlantsByCategory(floweringPlants);
+  
+  // Get up to 3 most allergenic plant groups to display
+  const groupsToDisplay = plantGroups.slice(0, 3);
+  const hasMoreGroups = plantGroups.length > 3;
+  
+  // Calculate total number of plants across all groups
+  const totalPlants = plantGroups.reduce((sum, group) => sum + group.count, 0);
 
   return (
     <Collapse in={open}>
@@ -67,17 +117,11 @@ const FloweringAlert = () => {
               </Typography>
               
               <Box component="div" sx={{ mt: 1 }}>
-                {plantsToDisplay.map((plant) => (
-                  <Typography key={plant.id} variant="body2">
-                    • {plant.name} {plant.allergenicity && `(аллергенность: ${plant.allergenicity}/5)`}
+                {groupsToDisplay.map((group) => (
+                  <Typography key={group.name} variant="body2">
+                    • {group.name} (аллергенность: {group.maxAllergenicity}/5)
                   </Typography>
                 ))}
-                
-                {hasMorePlants && (
-                  <Typography variant="body2" sx={{ mt: 0.5, fontStyle: 'italic' }}>
-                    ...и еще {floweringPlants.length - 3} видов растений
-                  </Typography>
-                )}
               </Box>
             </>
           ) : (

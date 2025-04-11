@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
+import { loadCityTrees } from '../services/cityPlantsService';
+import { CITY_TREES_LIMIT } from './plants';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -10,14 +12,45 @@ const prisma = new PrismaClient();
 // Получить все одобренные отчеты
 router.get('/', async (req, res) => {
   try {
-    const reports = await prisma.report.findMany({
+    // Получаем отчеты из базы данных
+    console.log('[reports:GET /] Загрузка одобренных отчетов из БД...');
+    const dbReports = await prisma.report.findMany({
       where: { approved: true },
       orderBy: { createdAt: 'desc' },
       include: {
         plant: true
       }
     });
-    res.json(reports);
+    console.log(`[reports:GET /] Загружено ${dbReports.length} отчетов из БД`);
+    
+    // Загружаем городские деревья как отчеты
+    console.log('[reports:GET /] Загрузка городских деревьев из JSON...');
+    const cityTrees = await loadCityTrees(CITY_TREES_LIMIT);
+    console.log(`[reports:GET /] Загружено ${cityTrees.length} городских деревьев`);
+    
+    // Преобразуем городские деревья в формат отчетов
+    const cityTreeReports = cityTrees.map(tree => {
+      return {
+        id: tree.id,
+        latitude: tree.latitude,
+        longitude: tree.longitude,
+        coordinates: [tree.latitude, tree.longitude],
+        severity: tree.allergenicity || 2,
+        type: 'plant',
+        plantType: tree.name,
+        description: tree.description || tree.name,
+        genus: tree.species.split(' ')[0] || tree.name,
+        approved: true,
+        createdAt: tree.createdAt,
+        updatedAt: tree.updatedAt
+      };
+    });
+    
+    // Объединяем данные
+    const allReports = [...dbReports, ...cityTreeReports];
+    console.log(`[reports:GET /] Всего объединено ${allReports.length} отчетов`);
+    
+    res.json(allReports);
   } catch (error) {
     console.error('Ошибка при получении отчетов:', error);
     res.status(500).json({ error: 'Ошибка при получении отчетов' });
