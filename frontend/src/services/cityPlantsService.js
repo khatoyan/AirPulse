@@ -10,9 +10,9 @@ export const loadCityPlants = async () => {
     const data = await response.json();
     console.log(`[cityPlantsService] Получено ${data.length} записей из JSON-файла`);
     
-    // Ограничиваем количество загружаемых объектов до 500
-    const limitedData = data.slice(0, 500);
-    console.log(`[cityPlantsService] Применяем ограничение: будут использованы только первые 500 записей из ${data.length}`);
+    // Ограничиваем количество загружаемых объектов
+    const limitedData = data.slice(0, 50000);
+    console.log(`[cityPlantsService] Применяем ограничение: будут использованы только первые 50000 записей из ${data.length}`);
     
     // Преобразуем данные в формат для отображения на карте
     const cityPlants = limitedData.map((plant, index) => {

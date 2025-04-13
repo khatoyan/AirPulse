@@ -21,9 +21,6 @@ export const createTimelineSlice = (set, get) => ({
       return;
     }
     
-    console.log(`Установка данных прогноза: ${data.length} временных точек`);
-    console.log('Пример данных прогноза:', data[0]);
-    
     // Нормализуем формат данных, если необходимо
     const normalizedData = data.map(item => ({
       ...item,
@@ -120,9 +117,6 @@ export const createTimelineSlice = (set, get) => ({
       return;
     }
     
-    console.log(`Генерация точек распространения для времени: ${weatherData.timeLabel || 'N/A'}`);
-    console.log('Данные о погоде:', weatherData);
-    
     // Берем только одобренные отчеты
     const approvedReports = reports.filter(report => report.approved);
     
@@ -165,8 +159,6 @@ export const createTimelineSlice = (set, get) => ({
         description: weatherData.description || weatherData.weather_description
       }
     );
-    
-    console.log(`Сгенерировано ${dispersedPoints.length} точек распространения для прогноза времени`);
     
     // Сохраняем оригинальные точки, чтобы не терять тепловые метки
     const { dispersedPoints: currentPoints } = get();

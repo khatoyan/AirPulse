@@ -414,7 +414,12 @@ export const isPlantFlowering = (plantType, currentDate = new Date()) => {
   if (!plantType || typeof plantType !== 'string') return true;
   
   // Нормализуем имя растения (убираем пробелы, приводим к нижнему регистру)
-  const normalizedPlantType = plantType.trim().toLowerCase();
+  let normalizedPlantType = plantType.trim().toLowerCase();
+  
+  // Обработка специфичных случаев "Береза"/"Берёза"
+  if (normalizedPlantType.includes('береза')) {
+    normalizedPlantType = normalizedPlantType.replace('береза', 'берёза');
+  }
   
   // Для симптомов и других типов отчетов (не растения) всегда возвращаем true
   if (normalizedPlantType === 'unknown' || 
@@ -428,7 +433,13 @@ export const isPlantFlowering = (plantType, currentDate = new Date()) => {
   
   // Проходим по всем известным растениям и ищем частичное совпадение
   for (const [plant, flowPeriod] of Object.entries(FLOWERING_PERIODS)) {
-    if (normalizedPlantType.includes(plant) || plant.includes(normalizedPlantType)) {
+    // Нормализуем имя растения из базы данных для сравнения
+    let normalizedPlant = plant.toLowerCase();
+    if (normalizedPlant.includes('береза')) {
+      normalizedPlant = normalizedPlant.replace('береза', 'берёза');
+    }
+    
+    if (normalizedPlantType.includes(normalizedPlant) || normalizedPlant.includes(normalizedPlantType)) {
       period = flowPeriod;
       break;
     }
@@ -487,13 +498,28 @@ function normalizeTreeData(tree) {
   
   if (!isCityTree) return tree; // Если не городское дерево, возвращаем как есть
   
+  // Функция для нормализации названия растения
+  const normalizePlantName = (name) => {
+    if (!name) return '';
+    
+    // Преобразуем в нижний регистр
+    let normalized = name.toLowerCase();
+    
+    // Заменяем "береза" на "берёза"
+    if (normalized.includes('береза')) {
+      normalized = normalized.replace('береза', 'берёза');
+    }
+    
+    return normalized;
+  };
+  
   // Определяем тип растения для получения параметров по умолчанию
   let speciesNormalized = 'default';
-  const treeName = tree.name ? tree.name.toLowerCase() : '';
+  const treeName = tree.name ? normalizePlantName(tree.name) : '';
   
   for (const knownSpecies of Object.keys(DEFAULT_TREE_PARAMS)) {
-    if (treeName.includes(knownSpecies.toLowerCase()) || 
-        knownSpecies.toLowerCase().includes(treeName)) {
+    const normalizedSpecies = normalizePlantName(knownSpecies);
+    if (treeName.includes(normalizedSpecies) || normalizedSpecies.includes(treeName)) {
       speciesNormalized = knownSpecies;
       break;
     }
@@ -508,8 +534,8 @@ function normalizeTreeData(tree) {
     // Преобразуем необходимые поля для модели распространения
     type: 'plant',
     severity: tree.allergenicity || 3,
-    allergen: tree.name.toLowerCase(),
-    plantType: tree.name.toLowerCase(),
+    allergen: normalizePlantName(tree.name),
+    plantType: normalizePlantName(tree.name),
     // Гарантируем наличие необходимых числовых параметров
     height: tree.height || defaultParams.height,
     crownDiameter: tree.crownDiameter || defaultParams.crownDiameter,
@@ -539,7 +565,7 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
   }
   
   // Лимитируем количество точек для производительности
-  const maxSourcePoints = 100; // Увеличиваем предел до 100 источников
+  const maxSourcePoints = 15000; // Увеличиваем предел до 15000 источников (было 5000)
   
   // Сортируем отчеты по важности (цветущие растения имеют приоритет)
   const sortedReports = [...reports].sort((a, b) => {
@@ -558,7 +584,8 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
     ? sortedReports.slice(0, maxSourcePoints) 
     : sortedReports;
 
-  console.log(`Расчет распространения пыльцы для ${limitedReports.length} отчетов с ветром ${safeWindSpeed} м/с, ${safeWindDirection}°`);
+  // Только один лог с полезной информацией
+  console.log(`Расчет распространения пыльцы для ${limitedReports.length} отчетов из ${reports.length} (лимит: ${maxSourcePoints}) с ветром ${safeWindSpeed} м/с, ${safeWindDirection}°`);
   
   // Определяем тип местности (для коэффициентов дисперсии)
   const terrainType = weatherData.terrainType || 'suburban';
@@ -589,10 +616,12 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
   const getTotalSourceCount = () => limitedReports.length;
   const getPointsPerSource = () => {
     const sourceCount = getTotalSourceCount();
-    if (sourceCount <= 10) return 30; // До 10 источников - максимальное качество
-    if (sourceCount <= 20) return 20; // До 20 источников - среднее качество
-    if (sourceCount <= 50) return 15; // До 50 источников - сниженное качество
-    return 10; // Для большого количества источников - минимальное качество
+    if (sourceCount <= 10) return 120; // Увеличено с 100 до 120
+    if (sourceCount <= 20) return 100; // Увеличено с 80 до 100
+    if (sourceCount <= 50) return 80; // Увеличено с 60 до 80 
+    if (sourceCount <= 100) return 60; // Увеличено с 40 до 60
+    if (sourceCount <= 1000) return 40; // Увеличено с 30 до 40
+    return 30; // Даже для очень большого количества источников
   };
   
   try {
@@ -621,7 +650,6 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
       // ВАЖНО: Проверяем, находится ли растение в периоде цветения
       // Если это растение и оно не цветет сейчас - не генерируем точки распространения
       if (normalizedReport.type === 'plant' && !isPlantFlowering(allergenType, currentDate)) {
-        console.log(`Растение ${allergenType} не цветет в текущем месяце, пропускаем расчет распространения`);
         return;
       }
       
@@ -644,10 +672,10 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
       const pointsPerSource = getPointsPerSource();
       
       // Радиус расчета концентрации
-      const maxDistance = Math.max(500, safeWindSpeed * 500); // Минимум 500м, увеличивается с силой ветра
+      const maxDistance = Math.max(2000, safeWindSpeed * 1000); // Минимум 2000м, увеличивается с силой ветра
       
       // Сетка для кластеризации - создаем виртуальную сетку для контроля плотности
-      const gridSize = 100; // Размер ячейки сетки в метрах
+      const gridSize = 50; // Размер ячейки сетки в метрах (уменьшен для более детальной карты)
       const grid = {}; // Объект для хранения точек по ключу сетки
       
       // Генерируем сетку точек для расчета концентрации
@@ -711,7 +739,7 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
         );
         
         // Если концентрация слишком мала, пропускаем точку
-        if (concentration < 0.01) continue;
+        if (concentration < 0.005) continue; // Уменьшено с 0.01 до 0.005 для более детальной карты
         
         // Преобразуем концентрацию в шкалу интенсивности от 1 до 5
         // Используем логарифмическую шкалу для лучшего распределения
@@ -723,10 +751,10 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
           // Создаем ключ для сетки, используя округленные координаты
           // Чем дальше от источника, тем больше размер ячейки
           const distanceFromSource = distance;
-          const gridMultiplier = distanceFromSource > 1000 ? 3 : 
-                                 distanceFromSource > 500 ? 2 : 1;
-          const gridKeyLat = Math.floor(newLat * 10000 / gridMultiplier) / 10000;
-          const gridKeyLng = Math.floor(newLng * 10000 / gridMultiplier) / 10000;
+          const gridMultiplier = distanceFromSource > 3000 ? 1.5 : 
+                                 distanceFromSource > 1500 ? 1.2 : 1;
+          const gridKeyLat = Math.floor(newLat * 30000 / gridMultiplier) / 30000; // Увеличена точность с 20000 до 30000
+          const gridKeyLng = Math.floor(newLng * 30000 / gridMultiplier) / 30000; // Увеличена точность с 20000 до 30000
           const gridKey = `${gridKeyLat}_${gridKeyLng}`;
           
           // Если в этой ячейке уже есть точка, используем точку с максимальной интенсивностью
@@ -777,7 +805,7 @@ export const calculatePollenDispersion = (reports, windSpeed, windDirection, tim
     return [];
   }
   
-  console.log(`Сгенерировано ${dispersedPoints.length} точек распространения по модели Гаусса (после оптимизации)`);
+  console.log(`Сгенерировано ${dispersedPoints.length} точек распространения по модели Гаусса из ${limitedReports.length} источников`);
   return dispersedPoints;
 };
 
@@ -797,7 +825,7 @@ export const mergeOverlappingZones = (points, radius = 100) => {
 
   // Используем пространственную индексацию для ускорения поиска соседей
   // Оптимизированная сетка для 2D пространства
-  const GRID_SIZE = radius * 2;
+  const GRID_SIZE = radius / 2; // Уменьшаем размер сетки для более детального разделения
   const grid = new Map();
   
   // Помещаем точки в сетку с оптимизированной структурой данных

@@ -40,11 +40,7 @@ const TimeSlider = () => {
   
   // Отладочный вывод данных прогноза
   useEffect(() => {
-    console.log('Состояние прогноза:', { 
-      forecastDataLength: forecastData?.length || 0, 
-      timelineActive,
-      selectedTimeIndex
-    });
+    // Удаляем лишний лог
   }, [forecastData, timelineActive, selectedTimeIndex]);
   
   // Эффект для автоматического воспроизведения
@@ -52,12 +48,10 @@ const TimeSlider = () => {
     let autoplayTimer;
     
     if (isPlaying && forecastData && forecastData.length > 0) {
-      console.log('Запускаем автоматическое воспроизведение прогноза');
       autoplayTimer = setInterval(() => {
         setSelectedTimeIndex((prevIndex) => {
           // Зацикливаем прогноз
           const nextIndex = (prevIndex + 1) % forecastData.length;
-          console.log(`Воспроизведение: переключение с ${prevIndex} на ${nextIndex}`);
           return nextIndex;
         });
       }, autoplaySpeed);
@@ -73,7 +67,6 @@ const TimeSlider = () => {
   // Если нет данных прогноза и timeline активен, загружаем их
   useEffect(() => {
     if (timelineActive && (!forecastData || forecastData.length === 0)) {
-      console.log('Активирован таймлайн без данных, загружаем прогноз...');
       const coords = useMapStore.getState().getMapCoordinates();
       loadForecast(coords.lat, coords.lng);
     }
@@ -104,14 +97,12 @@ const TimeSlider = () => {
   // Обработчик включения/выключения таймлайна
   const handleToggleTimeline = (e) => {
     e.stopPropagation(); // Предотвращаем пробрасывание клика
-    console.log('Переключение таймлайна');
     toggleTimeline();
   };
   
   // Обработчик сброса таймлайна
   const handleResetTimeline = (e) => {
     e.stopPropagation(); // Предотвращаем пробрасывание клика
-    console.log('Сброс таймлайна');
     setSelectedTimeIndex(0);
     setIsPlaying(false);
   };

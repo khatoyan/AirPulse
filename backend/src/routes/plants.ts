@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { loadCityTrees } from '../services/cityPlantsService';
+import { CITY_TREES_LIMIT } from '../constants/limits';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -19,9 +20,6 @@ const normalizePlantName = (name: string): string => {
   
   return normalized;
 };
-
-// Константа для ограничения количества городских деревьев
-export const CITY_TREES_LIMIT = 5000;
 
 // Get all plants
 router.get('/', async (req, res) => {
@@ -209,7 +207,7 @@ router.get('/:id', async (req, res) => {
     if (id.startsWith('city_')) {
       console.log(`[plants:GET /${id}] Идентификатор соответствует городскому дереву`);
       // Загружаем городские деревья
-      const cityTrees = await loadCityTrees(500);
+      const cityTrees = await loadCityTrees(CITY_TREES_LIMIT);
       
       // Ищем дерево по ID
       const cityTree = cityTrees.find(tree => tree.id === id);

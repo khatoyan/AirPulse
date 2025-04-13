@@ -102,7 +102,6 @@ const TREE_MAPPING: Record<string, {
  * @param limit Максимальное количество загружаемых объектов (по умолчанию 500)
  */
 export async function loadCityTrees(limit: number = 500): Promise<FormattedCityTree[]> {
-  console.log(`[cityPlantsService] Начало загрузки городских деревьев (лимит: ${limit})`);
   try {
     const filePath = path.join(__dirname, '../data/markers.json');
     
@@ -111,24 +110,21 @@ export async function loadCityTrees(limit: number = 500): Promise<FormattedCityT
       return [];
     }
     
-    console.log(`[cityPlantsService] Чтение файла: ${filePath}`);
     const rawData = fs.readFileSync(filePath, 'utf8');
-    
-    console.log(`[cityPlantsService] Парсинг JSON данных...`);
     const cityTrees: CityTreeMarker[] = JSON.parse(rawData);
     
-    console.log(`[cityPlantsService] Прочитано ${cityTrees.length} записей из JSON`);
+    console.log(`[ГОРОДСКИЕ ДЕРЕВЬЯ] Всего городских деревьев в JSON: ${cityTrees.length}`);
     
     // Ограничиваем количество загружаемых объектов
     const limitedTrees = cityTrees.slice(0, limit);
-    console.log(`[cityPlantsService] Применен лимит: ${limitedTrees.length} из ${cityTrees.length} записей`);
+    console.log(`[ГОРОДСКИЕ ДЕРЕВЬЯ] Загружено для использования: ${limitedTrees.length} из ${cityTrees.length} (лимит: ${limit})`);
     
     // Группировка по типам деревьев
     const treeTypes: Record<string, number> = {};
     limitedTrees.forEach(tree => {
       treeTypes[tree.name] = (treeTypes[tree.name] || 0) + 1;
     });
-    console.log('[cityPlantsService] Распределение типов деревьев:', treeTypes);
+    console.log('[ГОРОДСКИЕ ДЕРЕВЬЯ] Распределение типов деревьев:', treeTypes);
     
     // Преобразуем данные в формат, совместимый с моделью Plant
     const formattedTrees: FormattedCityTree[] = limitedTrees.map((tree, index) => {
@@ -161,28 +157,6 @@ export async function loadCityTrees(limit: number = 500): Promise<FormattedCityT
         updatedAt: new Date()
       };
     });
-    
-    // Проверяем диапазоны координат
-    let minLat = Number.MAX_VALUE, maxLat = Number.MIN_VALUE;
-    let minLng = Number.MAX_VALUE, maxLng = Number.MIN_VALUE;
-    
-    formattedTrees.forEach(tree => {
-      minLat = Math.min(minLat, tree.latitude);
-      maxLat = Math.max(maxLat, tree.latitude);
-      minLng = Math.min(minLng, tree.longitude);
-      maxLng = Math.max(maxLng, tree.longitude);
-    });
-    
-    console.log(`[cityPlantsService] Диапазон координат: 
-      Широта: ${minLat.toFixed(5)} - ${maxLat.toFixed(5)}
-      Долгота: ${minLng.toFixed(5)} - ${maxLng.toFixed(5)}`);
-    
-    console.log(`[cityPlantsService] Успешно подготовлено ${formattedTrees.length} городских деревьев`);
-    
-    // Логгируем первые несколько объектов для проверки
-    if (formattedTrees.length > 0) {
-      console.log('[cityPlantsService] Пример первого объекта:', JSON.stringify(formattedTrees[0], null, 2));
-    }
     
     return formattedTrees;
   } catch (error) {

@@ -23,6 +23,8 @@ import FloweringAlert from './FloweringAlert';
 import { normalizeIntensityWithTime } from '../../utils/mapUtils';
 // Импортируем функцию для проверки цветения растений
 import { isPlantFlowering } from '../../utils/pollenDispersion';
+// Импортируем константы для лимитов маркеров
+import { dispersionConfig } from '../../stores/mapConfig';
 
 // Импорт иконок для меток
 const symptomIcon = new URL('../../assets/icons/symptom-marker.svg', import.meta.url).href;
@@ -197,6 +199,21 @@ const HeatmapLayer = () => {
   const heatmapLayerRef = useRef(null);
   const { reports, updateHeatmap, selectedAllergen, timelineActive, timeDispersionPoints, dispersedPoints } = useMapStore();
   
+  // Функция для нормализации названия растения
+  const normalizePlantName = (name) => {
+    if (!name) return '';
+    
+    // Преобразуем в нижний регистр
+    let normalized = name.toLowerCase();
+    
+    // Заменяем "береза" на "берёза"
+    if (normalized.includes('береза')) {
+      normalized = normalized.replace('береза', 'берёза');
+    }
+    
+    return normalized;
+  };
+  
   // При изменении отчетов или флага обновления обновляем тепловую карту
   useEffect(() => {
     if (!map) return;
@@ -206,13 +223,13 @@ const HeatmapLayer = () => {
       let displayReports = reports || [];
       
       if (selectedAllergen) {
-        // Нормализуем выбранный аллерген (учитывая возможность "береза"/"берёза")
-        const normalizedAllergen = selectedAllergen.toLowerCase().replace('береза', 'берёза');
+        // Нормализуем выбранный аллерген
+        const normalizedAllergen = normalizePlantName(selectedAllergen);
         
         displayReports = displayReports.filter(report => {
           if (report.plantType && report.type === 'plant') {
             // Нормализуем plantType
-            const plantType = report.plantType.toLowerCase().replace('береза', 'берёза');
+            const plantType = normalizePlantName(report.plantType);
             return plantType.includes(normalizedAllergen);
           }
           return false;
@@ -228,7 +245,8 @@ const HeatmapLayer = () => {
           
           // Проверяем, является ли это растением и находится ли оно в периоде цветения
           if (report.type === 'plant') {
-            const plantType = report.plantType || report.genus || 'unknown';
+            // Нормализуем название растения перед проверкой
+            const plantType = normalizePlantName(report.plantType || report.genus || 'unknown');
             // Если растение не цветет, значительно уменьшаем его интенсивность
             if (!isPlantFlowering(plantType)) {
               intensity = intensity * 0.05; // 95% снижение интенсивности для нецветущих растений
@@ -295,6 +313,21 @@ const WindDispersionLayer = () => {
   const windDispersionLayerRef = useRef(null);
   const { dispersedPoints, timelineActive, timeDispersionPoints, updateHeatmap } = useMapStore();
   
+  // Функция для нормализации названия растения
+  const normalizePlantName = (name) => {
+    if (!name) return '';
+    
+    // Преобразуем в нижний регистр
+    let normalized = name.toLowerCase();
+    
+    // Заменяем "береза" на "берёза"
+    if (normalized.includes('береза')) {
+      normalized = normalized.replace('береза', 'берёза');
+    }
+    
+    return normalized;
+  };
+  
   useEffect(() => {
     if (!map) return;
     
@@ -323,10 +356,9 @@ const WindDispersionLayer = () => {
       
       // Определяем максимальное количество точек в зависимости от зума
       const getMaxPoints = (zoom) => {
-        if (zoom >= 15) return 5000; // Высокий зум - больше деталей
-        if (zoom >= 12) return 3000; // Средний зум
-        if (zoom >= 9) return 2000; // Низкий зум
-        return 1000; // Очень низкий зум
+        // Возвращаем максимально возможное значение для всех уровней зума,
+        // так как у нас реализована кластеризация маркеров
+        return 50000; // Большое значение, фактически снимающее ограничение
       };
       
       // Определяем параметры тепловой карты в зависимости от зума
@@ -358,8 +390,11 @@ const WindDispersionLayer = () => {
           let intensity = point.severity || 3;
           
           if (point.plantType) {
+            // Нормализуем название растения перед проверкой
+            const plantType = normalizePlantName(point.plantType);
+            
             // Если растение не цветет, уменьшаем интенсивность его распространения
-            if (!isPlantFlowering(point.plantType)) {
+            if (!isPlantFlowering(plantType)) {
               intensity = intensity * 0.03; // 97% снижение для нецветущих
             }
           }
@@ -419,6 +454,21 @@ function PointMarkers() {
   const markersLayerRef = useRef(null);
   const map = useMap();
   const [visibleBounds, setVisibleBounds] = useState(map.getBounds());
+  
+  // Функция для нормализации названия растения
+  const normalizePlantName = (name) => {
+    if (!name) return '';
+    
+    // Преобразуем в нижний регистр
+    let normalized = name.toLowerCase();
+    
+    // Заменяем "береза" на "берёза"
+    if (normalized.includes('береза')) {
+      normalized = normalized.replace('береза', 'берёза');
+    }
+    
+    return normalized;
+  };
   
   // Добавляем логирование для анализа поступающих отчетов
   useEffect(() => {
@@ -483,19 +533,20 @@ function PointMarkers() {
     // Фильтруем отчеты на основе выбранного аллергена
     let filteredReports = reports;
     if (selectedAllergen) {
-      // Нормализуем выбранный аллерген (учитывая возможность "береза"/"берёза")
-      const normalizedAllergen = selectedAllergen.toLowerCase().replace('береза', 'берёза');
+      // Нормализуем выбранный аллерген
+      const normalizedAllergen = normalizePlantName(selectedAllergen);
       
       filteredReports = reports.filter((report) => {
         // Для симптомов проверяем аллерген
         if (report.type === 'symptom') {
-          const allergen = report.allergen?.toLowerCase().replace('береза', 'берёза');
+          const allergen = normalizePlantName(report.allergen);
           return allergen === normalizedAllergen;
         }
-        // Для растений проверяем genus
+        // Для растений проверяем genus или plantType
         if (report.type === 'plant') {
-          const genus = report.genus?.toLowerCase().replace('береза', 'берёза');
-          return genus === normalizedAllergen;
+          const genus = normalizePlantName(report.genus);
+          const plantType = normalizePlantName(report.plantType);
+          return genus === normalizedAllergen || plantType === normalizedAllergen;
         }
         return false;
       });
@@ -1252,11 +1303,7 @@ function Map() {
   const { 
     toggleReportForm, 
     showReportForm, 
-    selectedLocation, 
-    setSelectedLocation, 
-    allergenTypes, 
-    setSelectedAllergen,
-    addReport
+    selectedLocation
   } = useMapStore();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
